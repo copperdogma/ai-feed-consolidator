@@ -1,6 +1,7 @@
 # AI Feed Consolidator Commands Reference
 
 20240120: Updated by Cam Marsollier with Claude 3.5 Sonnet to add code quality commands
+20240320: Updated by Cam Marsollier with Claude 3.5 Sonnet to add test commands
 
 This document serves as the authoritative reference for commands, paths, and operations specific to the AI Feed Consolidator project.
 
@@ -25,6 +26,11 @@ npm run lint        # Run ESLint
 npm run lint:fix    # Auto-fix ESLint issues
 npm run format      # Format code with Prettier
 npm run type-check  # TypeScript type checking
+
+# Testing
+npm run test        # Run tests in watch mode (requires manual quit)
+npm run test:ci     # Run tests once and exit (good for CI/CD)
+npm run test:coverage # Run tests with coverage report
 
 # Preview production build
 npm run preview

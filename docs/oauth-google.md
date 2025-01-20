@@ -325,6 +325,17 @@ npm run dev
    - Check that cookies are being set and sent properly
    - Ensure all necessary middleware is in the correct order
 
+4. **Database Connection Issues with Docker**
+   - When running the database in Docker but the application outside Docker:
+     - Use `localhost` instead of the service name in `DATABASE_URL`
+     - Example: `postgresql://postgres:postgres@localhost:5433/aifeed` instead of `postgresql://postgres:postgres@db:5433/aifeed`
+   - Ensure the database port is properly exposed in `docker-compose.yml`
+
+5. **Multiple Auth Implementation Conflicts**
+   - Keep only one authentication implementation to avoid conflicts
+   - When using a custom auth middleware, ensure it's properly integrated with Passport
+   - Remove any duplicate Passport strategy configurations
+
 ## Security Considerations
 1. Always use HTTPS in production
 2. Keep your `.env` file secure and never commit it to version control

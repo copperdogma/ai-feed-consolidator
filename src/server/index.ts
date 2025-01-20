@@ -1,9 +1,9 @@
 import express from 'express';
 import session from 'express-session';
-import passport from 'passport';
-import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
-import dotenv from 'dotenv';
 import cors from 'cors';
+import dotenv from 'dotenv';
+import { passport } from './middleware/auth';
+import { config } from './config';
 
 // Load environment variables
 dotenv.config();
@@ -12,14 +12,14 @@ const app = express();
 
 // Enable CORS
 app.use(cors({
-  origin: 'http://localhost:5173',
+  origin: config.clientUrl,
   credentials: true
 }));
 
 // Session configuration
 app.use(
   session({
-    secret: process.env.SESSION_SECRET || 'default_secret',
+    secret: config.sessionSecret,
     resave: false,
     saveUninitialized: false,
     cookie: {
@@ -34,36 +34,6 @@ app.use(
 app.use(passport.initialize());
 app.use(passport.session());
 
-// Passport configuration
-passport.use(
-  new GoogleStrategy(
-    {
-      clientID: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-      callbackURL: 'http://localhost:3003/auth/google/callback',
-    },
-    async (accessToken, refreshToken, profile, done) => {
-      try {
-        // Here we'll add user to database if they don't exist
-        // For now, just pass the profile
-        return done(null, profile);
-      } catch (error) {
-        return done(error as Error);
-      }
-    }
-  )
-);
-
-// Serialize user for the session
-passport.serializeUser((user, done) => {
-  done(null, user);
-});
-
-// Deserialize user from the session
-passport.deserializeUser((user: Express.User, done) => {
-  done(null, user);
-});
-
 // Auth Routes
 app.get(
   '/auth/google',
@@ -77,14 +47,14 @@ app.get(
 app.get(
   '/auth/google/callback',
   passport.authenticate('google', {
-    failureRedirect: 'http://localhost:5173/login',
-    successRedirect: 'http://localhost:5173/',
+    failureRedirect: `${config.clientUrl}/login`,
+    successRedirect: config.clientUrl,
   })
 );
 
 app.get('/auth/logout', (req, res) => {
   req.logout(() => {
-    res.redirect('/');
+    res.redirect(config.clientUrl);
   });
 });
 
@@ -97,7 +67,7 @@ app.get('/api/user', (req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 3003;
+const PORT = config.port;
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

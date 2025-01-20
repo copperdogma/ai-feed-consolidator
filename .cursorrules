@@ -4,12 +4,14 @@ I am Cam Marsollier and we're running on a 2024 MacBook Pro running Sequoia 15.2
 and decent with electronics.
 
 Core Principles:
+- The docs are your permanent memory store. Treat them as such.
 - Follow the project spec document as source of truth
 - Document design decisions and implementation details
 - Track active tasks and future work
 - Record project history and milestones
 - Highlight missing requirements or inconsistencies
 - Maintain measurable success criteria
+- If you discover something missing or wrong from the docs, prioritize updating the docs first.
 
 Document Structure:
 - docs/spec.md: Requirements contract and success criteria. When resolving spec questions, remove the queston and integrate the answer into the spec.
