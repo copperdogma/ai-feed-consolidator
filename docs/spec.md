@@ -1,29 +1,86 @@
-# Content Manager Application
+# AI Feed Consolidator Application
 
 20250119: Created with Claude 3.5 Sonnet
+20240120: Updated by Cam Marsollier with Claude 3.5 Sonnet to clarify personal-use scope and deployment strategy
 
 ## Core Purpose
-Create a centralized platform for managing and consuming content from various services by integrating with their native flagging systems (bookmarks, watch later, etc.), providing intelligent summaries, and maintaining a unified interface for content review and prioritization.
+Create a personal platform for managing and consuming content from various services by integrating with their native flagging systems (bookmarks, watch later, etc.), providing intelligent summaries, and maintaining a unified interface for content review and prioritization. This is primarily designed for personal use, with potential extension to immediate family members.
+
+## Scope Clarification
+- Single user focus (personal use)
+- Docker-based deployment (local or fly.io)
+- Web-first interface for multi-device access
+- Streamlined authentication (personal API keys)
+- Direct database access (no multi-user concerns)
+- Flexible implementation (can be tailored to personal preferences)
+- Family sharing as potential future enhancement
+
+## Deployment Strategy
+- Docker containerization for consistent environment
+- Two deployment options:
+  1. Local: Docker on Mac Mini home server
+  2. Cloud: fly.io using existing account
+- Web interface accessible from any device
+- Environment variables for configuration
+- Volume mounts for persistent storage
+- Regular backups to secure location
 
 ## Outstanding Questions
 ### High Priority
 - How should we integrate with third-party flagging systems?
-  - Context: Need to determine technical approach for each platform
+  - Context: Need to determine technical approach for personal accounts
   - Related sections: Content Integration
   - Questions:
-    - Can we hook into YouTube "Watch Later" API?
-    - What are the API limitations for X bookmarks?
-    - How to handle Feedly saved items?
+    - Can we hook into YouTube "Watch Later" API using personal API key?
+    - What are the API limitations for personal X account?
+    - How to handle Feedly saved items from personal feed?
   - Status: Needs research
 
 - What should be the format for email-based prioritization?
-  - Context: Users need a reliable way to flag content via email
+  - Context: Personal email workflow integration
   - Related sections: Content Integration
   - Questions:
-    - What email subject prefix indicates priority?
-    - Should there be multiple priority levels?
-    - How to handle malformed subjects?
+    - What email subject prefix works best for your workflow?
+    - How to handle personal email filters/rules?
   - Status: Needs discussion
+
+- How should we handle OpenAI API integration?
+  - Context: Using personal OpenAI account
+  - Related sections: Intelligent Summaries
+  - Questions:
+    - Which model best balances cost vs quality for personal use?
+    - What's a reasonable monthly API budget?
+  - Implementation:
+    - Primary: Use GPT-4 for summary generation
+    - Fallback: GPT-3.5-turbo for less complex tasks
+    - Cache summaries to minimize API costs
+  - Status: Partially resolved, needs implementation details
+
+- How should we handle content persistence?
+  - Context: Docker volume storage
+  - Related sections: Historical Feed
+  - Questions:
+    - Backup strategy for Docker volumes?
+    - Cache storage location?
+  - Implementation:
+    - Database: PostgreSQL (fly.io native support)
+    - Local development: Docker PostgreSQL container
+    - Production: fly.io PostgreSQL instance
+    - Regular backups via fly.io tooling
+  - Status: Partially resolved, needs backup strategy details
+
+- What web framework should we use?
+  - Context: Need a responsive web UI for all devices
+  - Related sections: User Interface
+  - Questions:
+    - Progressive Web App features?
+  - Implementation:
+    - Framework: React with TypeScript
+    - UI Library: Material-UI (MUI) for responsive components
+    - State Management: React Query for API data
+    - Build Tool: Vite for fast development
+    - Mobile: Responsive design with MUI
+  - Status: Resolved, ready for implementation
 
 ### Medium Priority
 - How should historical content be organized?

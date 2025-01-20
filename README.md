@@ -1,4 +1,4 @@
-# Content Manager
+# AI Feed Consolidator
 
 A centralized platform for managing and consuming content from various services by integrating with their native flagging systems, providing intelligent summaries, and maintaining a unified interface for content review and prioritization.
 
