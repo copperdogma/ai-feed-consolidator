@@ -1,12 +1,51 @@
 # AI Feed Consolidator Commands Reference
 
+20240120: Updated by Cam Marsollier with Claude 3.5 Sonnet to add code quality commands
+
 This document serves as the authoritative reference for commands, paths, and operations specific to the AI Feed Consolidator project.
 
 ## Project Structure
 - `/app` - Application root in production container
 - `/data` - Persistent data storage
+- `/src` - Source code directory
+- `/docs` - Project documentation
 
 ## Local Development Commands
+
+### NPM Scripts
+```bash
+# Start development server
+npm run dev
+
+# Build for production
+npm run build
+
+# Code Quality
+npm run lint        # Run ESLint
+npm run lint:fix    # Auto-fix ESLint issues
+npm run format      # Format code with Prettier
+npm run type-check  # TypeScript type checking
+
+# Preview production build
+npm run preview
+```
+
+### Code Quality Configuration Files
+- `.prettierrc` - Prettier configuration
+  ```json
+  {
+    "semi": true,
+    "trailingComma": "es5",
+    "singleQuote": true,
+    "printWidth": 100,
+    "tabWidth": 2,
+    "useTabs": false,
+    "bracketSpacing": true,
+    "arrowParens": "avoid"
+  }
+  ```
+- `eslint.config.js` - ESLint configuration (flat config format)
+- `tsconfig.json` - TypeScript configuration
 
 ### Docker Development
 ```bash
@@ -215,12 +254,7 @@ CREATE DATABASE "dev-ai-feed-consolidator-db";
 ### Configuration Files
 - `fly.toml` - Main fly.io configuration
 - `infra/supervisord.conf` - Supervisor configuration
-- `infra/start.sh` - Container startup script
-- `infra/Dockerfile` - Container definition
-
-### Data Directories
-- `/app` - Application files
-- `/data` - Persistent storage
+- `infra/start.sh`
 
 ## Environment Variables
 Required environment variables for different environments:
@@ -228,56 +262,25 @@ Required environment variables for different environments:
 ### Development
 ```bash
 NODE_ENV=development
-DB_CONNECTION_STRING_DEV=postgresql://postgres@localhost:5432/dev-ai-feed-consolidator-db
-DB_USERNAME_DEV=postgres
-DB_PASSWORD_DEV=
-DB_HOST_NAME_DEV=localhost
-DB_PORT_DEV=5432
+DATABASE_URL=postgresql://postgres:postgres@db:5433/aifeed
 ```
 
 ### Testing
 ```bash
 NODE_ENV=test
-DB_CONNECTION_STRING_TEST=postgresql://postgres@localhost:5432/test-ai-feed-consolidator-db
-DB_USERNAME_TEST=postgres
-DB_PASSWORD_TEST=
-DB_HOST_NAME_TEST=localhost
-DB_PORT_TEST=5432
+DATABASE_URL=postgresql://postgres:postgres@db:5433/aifeed_test
 ```
 
 ### Production
 ```bash
 NODE_ENV=production
-DB_CONNECTION_STRING_PROD=postgres://postgres:password@ai-feed-consolidator-postgres.internal:5432/ai-feed-consolidator
-DB_USERNAME_PROD=postgres
-DB_PASSWORD_PROD=<secret>
-DB_HOST_NAME_PROD=ai-feed-consolidator-postgres.internal
-DB_PORT_PROD=5432
+DATABASE_URL=postgres://postgres:password@ai-feed-consolidator-postgres.internal:5432/aifeed
 PORT=8080
 ORIGIN=https://ai-feed-consolidator.chat
 ```
 
-## Troubleshooting Commands
-
-### Container Debugging
-```bash
-# SSH into container
-flyctl ssh console
-
-# Check logs
-flyctl logs
-
-# Check service logs
-supervisorctl tail -f node
-```
-
-### Database Verification
-```bash
-# PostgreSQL
-flyctl postgres connect -a ai-feed-consolidator-postgres -c "\dt"
-```
-
 ## Notes
 - Always use `--remote-only` for deployments to ensure consistent builds
-- Supervisor manages Node.js process
-- Volume mounts persist across deployments 
+- Use npm scripts for code quality tasks
+- ESLint is configured with the new flat config format (ESLint 9+)
+- Prettier is integrated with ESLint for consistent formatting

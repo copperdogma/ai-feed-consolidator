@@ -1,69 +1,50 @@
-# AI Feed Consolidator
+# React + TypeScript + Vite
 
-A centralized platform for managing and consuming content from various services by integrating with their native flagging systems, providing intelligent summaries, and maintaining a unified interface for content review and prioritization.
+This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
-## Core Features
+Currently, two official plugins are available:
 
-- **Platform Integration**
-  - YouTube Watch Later
-  - X/Twitter Bookmarks
-  - Feedly Saved Items
-  - Email-based flagging
-  - Slack saved items
+- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
+- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
 
-- **Intelligent Summaries**
-  - Two-level summary system
-    - Level 1: Core points and direct answers
-    - Level 2: Detailed overview with context
-  - Time-to-consume estimates
-  - Automatic topic detection
-  - Priority-based organization
+## Expanding the ESLint configuration
 
-- **Unified Interface**
-  - Topic-based content grouping
-  - Priority management
-  - Cross-platform content alignment
-  - Historical tracking
-  - Advanced search capabilities
+If you are developing a production application, we recommend updating the configuration to enable type aware lint rules:
 
-## Getting Started
+- Configure the top-level `parserOptions` property like this:
 
-### Prerequisites
-- [To be determined]
-
-### Installation
-- [Coming soon]
-
-### Configuration
-- [Coming soon]
-
-## Development
-
-### Project Structure
-```
-docs/
-  ├── spec.md      # Detailed specifications
-  ├── design.md    # Technical design
-  ├── todo.md      # Task tracking
-  └── log.md       # Project history
+```js
+export default tseslint.config({
+  languageOptions: {
+    // other options...
+    parserOptions: {
+      project: ['./tsconfig.node.json', './tsconfig.app.json'],
+      tsconfigRootDir: import.meta.dirname,
+    },
+  },
+})
 ```
 
-### Contributing
-We welcome contributions! Please read our contributing guidelines before submitting pull requests.
+- Replace `tseslint.configs.recommended` to `tseslint.configs.recommendedTypeChecked` or `tseslint.configs.strictTypeChecked`
+- Optionally add `...tseslint.configs.stylisticTypeChecked`
+- Install [eslint-plugin-react](https://github.com/jsx-eslint/eslint-plugin-react) and update the config:
 
-## Performance Goals
+```js
+// eslint.config.js
+import react from 'eslint-plugin-react'
 
-- Platform sync: <30 seconds
-- Summary generation: <5 seconds
-- UI responsiveness with 10,000+ items
-- Efficient historical data access
-- Quick priority management (≤2 clicks)
-- Original content access (1 click)
-
-## Acknowledgments
-
-This project draws inspiration from:
-- [auto-news](https://github.com/finaldie/auto-news) - A personal news aggregator with LLM integration
-
-## License
-[License type to be determined]
+export default tseslint.config({
+  // Set the react version
+  settings: { react: { version: '18.3' } },
+  plugins: {
+    // Add the react plugin
+    react,
+  },
+  rules: {
+    // other rules...
+    // Enable its recommended rules
+    ...react.configs.recommended.rules,
+    ...react.configs['jsx-runtime'].rules,
+  },
+})
+```

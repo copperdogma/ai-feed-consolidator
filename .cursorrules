@@ -28,6 +28,7 @@ Document Format:
   - Include references where relevant to the content (like the original url)
 
 Programming Guidelines:
+- Default to searching the web for examples of how to do things and useing pre-existing libraries and frameworks when possible.
 - Cross-reference relevant documentation during development.
 - Use comments to explain non-obvious code logic.
 - When we're brainstorming implementation, suggest both an MVP and "best practices" approach.
@@ -40,3 +41,4 @@ Specific Rules:
 - If I say "record that" or "document that", update the design.md and/or todo.md as appropriate with the new information.
 - If I ask about our next priority, check spec.md first to ansure all outstanding questions are resolved. Next check todo.md.
 - If I say "create a milestone," gather up any completed todos and add them to the new milestone.
+- If I say "check in to git," add everything new to git (git add .), create a PR based on recent changes with appropriate comments (possible latest CHANGELOG.md), and merge it.
