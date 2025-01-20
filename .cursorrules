@@ -38,6 +38,13 @@ Programming Guidelines:
 - Automatically update or propose updates to /doc/spec.md if new requirements emerge from the codebase.
 - If encountering a new issue or task during coding, log it in /doc/todo.md.
 
+Test Failure/Bug Fixing Loop
+- Run the tests with npm run test:ci
+- If the tests fail, categorize them by cause, do a root cause analysis, and tackle only one cause at a time, running the tests after each fix to ensure the issue is solved and not moving on until it is.
+- Prioritize the test failure that might be causing other tests to fail.
+- When struggling to fix an issue, frequently stop. Take a step back to consider if the approach itself is wrong. Don't just blindly fix errors.
+- Search the @web for assitance or ideas for other approaches, especially if the error is persistent.
+
 Specific Rules:
 - If I say "todo: [explanation of todo item]", create a new todo item in todo.md in the appropriate section, and feel free to rewrord it for clarity.
 - If I say "record that" or "document that", update the design.md and/or todo.md as appropriate with the new information.

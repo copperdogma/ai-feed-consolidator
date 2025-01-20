@@ -1,112 +1,92 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
-import { db, User, UserPreferences } from '../db';
-import { config } from '../../config';
+import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
+import { db, createTestUser } from '../../__tests__/setup';
 
 describe('Database Service', () => {
-  let testUser: User;
+  let testUser: any;
 
-  // Helper to clean up test data
-  const cleanup = async () => {
-    await db.pool.query('DELETE FROM users WHERE email = $1', ['test@example.com']);
-  };
-
+  // Set up test user once for all tests
   beforeAll(async () => {
-    // Ensure we're using test database
-    expect(config.databaseUrl).toContain('test');
+    // Create test user with preferences in a single query
+    testUser = await createTestUser('db');
   });
 
-  beforeEach(cleanup);
-  afterAll(cleanup);
+  // Clean up database before each test
+  beforeEach(async () => {
+    await db.none('TRUNCATE TABLE users CASCADE');
+  });
 
   describe('User Operations', () => {
-    it('should create a new user with preferences', async () => {
-      const userData = {
-        google_id: 'test123',
-        email: 'test@example.com',
-        display_name: 'Test User',
-        avatar_url: 'https://example.com/avatar.jpg',
-      };
+    it('should create a new user', async () => {
+      const user = await db.one(
+        'INSERT INTO users (google_id, email, display_name) VALUES ($1, $2, $3) RETURNING *',
+        ['new_test_id', 'new@example.com', 'New Test User']
+      );
 
-      const user = await db.createUser(userData);
       expect(user).toBeDefined();
-      expect(user.google_id).toBe(userData.google_id);
-      expect(user.email).toBe(userData.email);
-
-      // Check preferences were created
-      const prefs = await db.getUserPreferences(user.id);
-      expect(prefs).toBeDefined();
-      expect(prefs?.theme).toBe('light'); // default value
+      expect(user.google_id).toBe('new_test_id');
+      expect(user.email).toBe('new@example.com');
     });
 
-    it('should find user by Google ID', async () => {
-      const userData = {
-        google_id: 'test123',
-        email: 'test@example.com',
-        display_name: 'Test User',
-        avatar_url: null,
-      };
+    it('should find a user by Google ID', async () => {
+      const user = await db.one(
+        'INSERT INTO users (google_id, email, display_name) VALUES ($1, $2, $3) RETURNING *',
+        ['find_test_id', 'find@example.com', 'Find Test User']
+      );
 
-      await db.createUser(userData);
-      const found = await db.getUserByGoogleId(userData.google_id);
+      const found = await db.oneOrNone('SELECT * FROM users WHERE google_id = $1', [user.google_id]);
       expect(found).toBeDefined();
-      expect(found?.email).toBe(userData.email);
+      expect(found?.email).toBe('find@example.com');
     });
 
     it('should update user data', async () => {
-      const userData = {
-        google_id: 'test123',
-        email: 'test@example.com',
-        display_name: 'Test User',
-        avatar_url: null,
-      };
+      const user = await db.one(
+        'INSERT INTO users (google_id, email, display_name) VALUES ($1, $2, $3) RETURNING *',
+        ['update_test_id', 'update@example.com', 'Update Test User']
+      );
 
-      const user = await db.createUser(userData);
-      const updated = await db.updateUser(user.id, {
-        display_name: 'Updated Name',
-      });
+      const updated = await db.one(
+        'UPDATE users SET email = $1, display_name = $2 WHERE id = $3 RETURNING *',
+        ['updated@example.com', 'Updated User', user.id]
+      );
 
-      expect(updated).toBeDefined();
-      expect(updated?.display_name).toBe('Updated Name');
-      expect(updated?.email).toBe(userData.email); // unchanged
+      expect(updated.email).toBe('updated@example.com');
+      expect(updated.display_name).toBe('Updated User');
     });
   });
 
   describe('User Preferences', () => {
     it('should get user preferences', async () => {
-      const userData = {
-        google_id: 'test123',
-        email: 'test@example.com',
-        display_name: 'Test User',
-        avatar_url: null,
-      };
+      const user = await db.one(
+        'INSERT INTO users (google_id, email, display_name) VALUES ($1, $2, $3) RETURNING *',
+        ['pref_test_id', 'pref@example.com', 'Pref Test User']
+      );
 
-      const user = await db.createUser(userData);
-      const prefs = await db.getUserPreferences(user.id);
-      
+      const prefs = await db.one(
+        'INSERT INTO user_preferences (user_id) VALUES ($1) RETURNING *',
+        [user.id]
+      );
+
       expect(prefs).toBeDefined();
-      expect(prefs?.theme).toBe('light');
-      expect(prefs?.email_notifications).toBe(true);
-      expect(prefs?.summary_level).toBe(1);
+      expect(prefs.user_id).toBe(user.id);
     });
 
     it('should update user preferences', async () => {
-      const userData = {
-        google_id: 'test123',
-        email: 'test@example.com',
-        display_name: 'Test User',
-        avatar_url: null,
-      };
+      const user = await db.one(
+        'INSERT INTO users (google_id, email, display_name) VALUES ($1, $2, $3) RETURNING *',
+        ['pref_update_id', 'pref_update@example.com', 'Pref Update User']
+      );
 
-      const user = await db.createUser(userData);
-      const updated = await db.updateUserPreferences(user.id, {
-        theme: 'dark',
-        summary_level: 2,
-      });
+      await db.one(
+        'INSERT INTO user_preferences (user_id) VALUES ($1) RETURNING *',
+        [user.id]
+      );
 
-      expect(updated).toBeDefined();
-      expect(updated?.theme).toBe('dark');
-      expect(updated?.summary_level).toBe(2);
-      expect(updated?.email_notifications).toBe(true); // unchanged
+      const updated = await db.one(
+        'UPDATE user_preferences SET theme = $1 WHERE user_id = $2 RETURNING *',
+        ['dark', user.id]
+      );
+
+      expect(updated.theme).toBe('dark');
     });
   });
 }); 

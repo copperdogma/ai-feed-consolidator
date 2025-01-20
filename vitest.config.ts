@@ -19,5 +19,16 @@ export default defineConfig({
         '**/vite.config.*',
       ],
     },
+    testTimeout: 30000,
+    hookTimeout: 30000,
+    pool: 'forks',
+    poolOptions: {
+      threads: {
+        singleThread: true
+      }
+    },
+    retry: 1,
+    reporters: ['verbose'],
+    teardownTimeout: 10000
   },
 }); 

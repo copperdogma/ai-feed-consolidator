@@ -32,6 +32,12 @@ npm run test        # Run tests in watch mode (requires manual quit)
 npm run test:ci     # Run tests once and exit (good for CI/CD)
 npm run test:coverage # Run tests with coverage report
 
+# Logging
+npm run dev | pino-pretty                  # Pretty print logs during development
+tail -f logs/app.log | pino-pretty         # View and pretty print log file
+grep -i error logs/app.log | pino-pretty   # Filter and pretty print errors
+pino-pretty -c -t 'SYS:standard' < logs/app.log  # Custom time format for logs
+
 # Preview production build
 npm run preview
 ```
@@ -93,6 +99,31 @@ docker stats ai-feed-consolidator-app
 
 # Restart services
 docker exec ai-feed-consolidator-app supervisorctl restart node
+```
+
+### Log Management
+```bash
+# View real-time logs with pretty printing
+tail -f logs/app.log | pino-pretty
+
+# Search logs for errors
+grep -i "error" logs/app.log | pino-pretty
+
+# Search logs for specific user activity
+grep -i "userId" logs/app.log | pino-pretty
+
+# Filter logs by date (example for Jan 20, 2025)
+grep "2025-01-20" logs/app.log | pino-pretty
+
+# Count error occurrences
+grep -i "error" logs/app.log | wc -l
+
+# Rotate logs (if needed)
+mv logs/app.log logs/app.$(date +%Y%m%d).log
+touch logs/app.log
+
+# Clean old logs (older than 7 days)
+find logs/ -name "app.*.log" -mtime +7 -delete
 ```
 
 ### Multi-stage Builds

@@ -90,6 +90,66 @@ Key considerations:
 - Storage scalability
 - UI responsiveness
 
+### Logging Strategy
+The application uses Pino for structured logging with a centralized logger configuration:
+
+- **Logger Implementation**
+  - Centralized logger in `src/server/logger.ts`
+  - Shared instance across all modules
+  - Multi-target output (console and file)
+  - Structured JSON logging with pretty printing
+
+- **Configuration Details**
+  ```typescript
+  {
+    level: process.env.LOG_LEVEL || 'info',
+    transport: {
+      targets: [
+        {
+          target: 'pino-pretty',  // Console output
+          options: {
+            colorize: true,
+            translateTime: 'SYS:standard',
+            ignore: 'pid,hostname'
+          }
+        },
+        {
+          target: 'pino/file',    // File output
+          options: { 
+            destination: './logs/app.log',
+            mkdir: true
+          }
+        }
+      ]
+    }
+  }
+  ```
+
+- **Log Categories**
+  - Authentication events (login, logout, session management)
+  - Database operations (queries, connections, transactions)
+  - API requests/responses (via pino-http middleware)
+  - Application lifecycle (startup, shutdown, errors)
+  - Error tracking (with full stack traces and context)
+
+- **Development Features**
+  - Pretty-printed console output for readability
+  - Automatic log directory creation
+  - Full error stack traces
+  - Request/response logging with pino-http
+
+- **Production Features**
+  - JSON format for log aggregation
+  - File-based logging with rotation
+  - Error context preservation
+  - Performance optimized transport
+
+- **Environment Configuration**
+  - `LOG_LEVEL`: Controls logging verbosity (default: 'info')
+  - `NODE_ENV`: Affects logging format and detail
+  - Configurable log file location
+  - Customizable pretty-print options
+
 ### Data Storage
 Requirements:
 - Support for 10,000+ items

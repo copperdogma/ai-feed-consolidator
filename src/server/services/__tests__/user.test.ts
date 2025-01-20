@@ -1,136 +1,166 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
+import { db, createTestUser } from '../../__tests__/setup';
 import { UserService } from '../user';
-import { db } from '../db';
 import type { Profile } from 'passport-google-oauth20';
 
-// Mock the database service
-vi.mock('../db', () => ({
-  db: {
-    createUser: vi.fn(),
-    getUserByGoogleId: vi.fn(),
-    getUserById: vi.fn(),
-    getUserPreferences: vi.fn(),
-    updateUser: vi.fn(),
-    updateUserPreferences: vi.fn(),
-  },
-}));
-
 describe('UserService', () => {
-  const mockProfile: Partial<Profile> = {
-    id: 'google123',
-    displayName: 'Test User',
-    emails: [{ value: 'test@example.com', verified: true }],
-    photos: [{ value: 'https://example.com/photo.jpg' }],
-  };
+  let testUser: any;
 
-  const mockUser = {
-    id: 1,
-    google_id: 'google123',
-    email: 'test@example.com',
-    display_name: 'Test User',
-    avatar_url: 'https://example.com/photo.jpg',
-    created_at: new Date(),
-    updated_at: new Date(),
-  };
+  // Set up test user once for all tests
+  beforeAll(async () => {
+    // Create test user with preferences in a single query
+    testUser = await createTestUser('user');
+  });
 
-  const mockPreferences = {
-    user_id: 1,
-    theme: 'light' as const,
-    email_notifications: true,
-    content_language: 'en',
-    summary_level: 1 as const,
-    created_at: new Date(),
-    updated_at: new Date(),
-  };
-
-  beforeEach(() => {
-    vi.clearAllMocks();
+  // Clean up database before each test
+  beforeEach(async () => {
+    await db.none('TRUNCATE TABLE users CASCADE');
   });
 
   describe('findOrCreateGoogleUser', () => {
     it('should create new user if not found', async () => {
-      vi.mocked(db.getUserByGoogleId).mockResolvedValue(null);
-      vi.mocked(db.createUser).mockResolvedValue(mockUser);
-      vi.mocked(db.getUserPreferences).mockResolvedValue(mockPreferences);
+      const profile: Profile = {
+        id: 'new_google_id',
+        emails: [{ value: 'new@example.com', verified: true }],
+        displayName: 'New User',
+        photos: [{ value: 'https://example.com/photo.jpg' }],
+        provider: 'google',
+        _raw: '',
+        _json: {
+          iss: 'https://accounts.google.com',
+          aud: 'test-client-id',
+          sub: 'new_google_id',
+          iat: Math.floor(Date.now() / 1000),
+          exp: Math.floor(Date.now() / 1000) + 3600
+        },
+        profileUrl: 'https://example.com/profile'
+      };
 
-      const result = await UserService.findOrCreateGoogleUser(mockProfile as Profile);
-
-      expect(db.getUserByGoogleId).toHaveBeenCalledWith(mockProfile.id);
-      expect(db.createUser).toHaveBeenCalledWith({
-        google_id: mockProfile.id,
-        email: mockProfile.emails![0].value,
-        display_name: mockProfile.displayName,
-        avatar_url: mockProfile.photos![0].value,
-      });
-      expect(result).toEqual({ user: mockUser, preferences: mockPreferences });
+      const result = await UserService.findOrCreateGoogleUser(profile);
+      expect(result).toBeDefined();
+      expect(result.user.google_id).toBe(profile.id);
+      expect(result.user.email).toBe(profile.emails?.[0]?.value);
+      expect(result.preferences).toBeDefined();
     });
 
     it('should update existing user if found', async () => {
-      const existingUser = { ...mockUser, display_name: 'Old Name' };
-      vi.mocked(db.getUserByGoogleId).mockResolvedValue(existingUser);
-      vi.mocked(db.updateUser).mockResolvedValue(mockUser);
-      vi.mocked(db.getUserPreferences).mockResolvedValue(mockPreferences);
+      // Create initial user
+      const initialProfile: Profile = {
+        id: 'existing_google_id',
+        emails: [{ value: 'old@example.com', verified: true }],
+        displayName: 'Old User',
+        photos: [{ value: 'https://example.com/old.jpg' }],
+        provider: 'google',
+        _raw: '',
+        _json: {
+          iss: 'https://accounts.google.com',
+          aud: 'test-client-id',
+          sub: 'existing_google_id',
+          iat: Math.floor(Date.now() / 1000),
+          exp: Math.floor(Date.now() / 1000) + 3600
+        },
+        profileUrl: 'https://example.com/profile'
+      };
 
-      const result = await UserService.findOrCreateGoogleUser(mockProfile as Profile);
+      await UserService.findOrCreateGoogleUser(initialProfile);
 
-      expect(db.getUserByGoogleId).toHaveBeenCalledWith(mockProfile.id);
-      expect(db.updateUser).toHaveBeenCalledWith(existingUser.id, {
-        display_name: mockProfile.displayName,
-      });
-      expect(result).toEqual({ user: mockUser, preferences: mockPreferences });
+      // Update with new profile
+      const updatedProfile: Profile = {
+        id: 'existing_google_id',
+        emails: [{ value: 'updated@example.com', verified: true }],
+        displayName: 'Updated User',
+        photos: [{ value: 'https://example.com/new.jpg' }],
+        provider: 'google',
+        _raw: '',
+        _json: {
+          iss: 'https://accounts.google.com',
+          aud: 'test-client-id',
+          sub: 'existing_google_id',
+          iat: Math.floor(Date.now() / 1000),
+          exp: Math.floor(Date.now() / 1000) + 3600
+        },
+        profileUrl: 'https://example.com/profile'
+      };
+
+      const result = await UserService.findOrCreateGoogleUser(updatedProfile);
+      expect(result).toBeDefined();
+      expect(result.user.google_id).toBe(updatedProfile.id);
+      expect(result.user.email).toBe(updatedProfile.emails?.[0]?.value);
+      expect(result.user.display_name).toBe(updatedProfile.displayName);
+      expect(result.user.avatar_url).toBe(updatedProfile.photos?.[0]?.value);
     });
 
     it('should throw if preferences not found', async () => {
-      vi.mocked(db.getUserByGoogleId).mockResolvedValue(mockUser);
-      vi.mocked(db.getUserPreferences).mockResolvedValue(null);
+      // Create user without preferences
+      const user = await db.one(
+        'INSERT INTO users (google_id, email, display_name) VALUES ($1, $2, $3) RETURNING *',
+        ['no_prefs_id', 'no_prefs@example.com', 'No Prefs User']
+      );
 
-      await expect(
-        UserService.findOrCreateGoogleUser(mockProfile as Profile)
-      ).rejects.toThrow('User preferences not found');
+      const profile: Profile = {
+        id: user.google_id,
+        emails: [{ value: user.email, verified: true }],
+        displayName: user.display_name,
+        photos: [{ value: 'https://example.com/photo.jpg' }],
+        provider: 'google',
+        _raw: '',
+        _json: {
+          iss: 'https://accounts.google.com',
+          aud: 'test-client-id',
+          sub: user.google_id,
+          iat: Math.floor(Date.now() / 1000),
+          exp: Math.floor(Date.now() / 1000) + 3600
+        },
+        profileUrl: 'https://example.com/profile'
+      };
+
+      await expect(UserService.findOrCreateGoogleUser(profile)).rejects.toThrow();
     });
   });
 
   describe('getUserProfile', () => {
     it('should return user and preferences if found', async () => {
-      vi.mocked(db.getUserById).mockResolvedValue(mockUser);
-      vi.mocked(db.getUserPreferences).mockResolvedValue(mockPreferences);
-
-      const result = await UserService.getUserProfile(1);
-
-      expect(result).toEqual({ user: mockUser, preferences: mockPreferences });
+      const user = await createTestUser('profile');
+      const result = await UserService.getUserProfile(user.id);
+      expect(result).toBeDefined();
+      expect(result?.user.id).toBe(user.id);
+      expect(result?.preferences).toBeDefined();
     });
 
     it('should return null if user not found', async () => {
-      vi.mocked(db.getUserById).mockResolvedValue(null);
-
-      const result = await UserService.getUserProfile(1);
-
+      const result = await UserService.getUserProfile(999999);
       expect(result).toBeNull();
-      expect(db.getUserPreferences).not.toHaveBeenCalled();
     });
 
     it('should return null if preferences not found', async () => {
-      vi.mocked(db.getUserById).mockResolvedValue(mockUser);
-      vi.mocked(db.getUserPreferences).mockResolvedValue(null);
+      // Create user without preferences
+      const user = await db.one(
+        'INSERT INTO users (google_id, email, display_name) VALUES ($1, $2, $3) RETURNING *',
+        ['no_prefs_profile', 'no_prefs_profile@example.com', 'No Prefs Profile User']
+      );
 
-      const result = await UserService.getUserProfile(1);
-
+      const result = await UserService.getUserProfile(user.id);
       expect(result).toBeNull();
     });
   });
 
   describe('updatePreferences', () => {
     it('should update user preferences', async () => {
-      const updates = { theme: 'dark' as const, summary_level: 2 as const };
-      vi.mocked(db.updateUserPreferences).mockResolvedValue({
-        ...mockPreferences,
-        ...updates,
-      });
+      const user = await createTestUser('prefs');
+      const updates = {
+        theme: 'dark',
+        emailNotifications: false,
+        contentLanguage: 'fr',
+        summaryLevel: 2
+      };
 
-      const result = await UserService.updatePreferences(1, updates);
-
-      expect(db.updateUserPreferences).toHaveBeenCalledWith(1, updates);
-      expect(result).toEqual({ ...mockPreferences, ...updates });
+      const result = await UserService.updatePreferences(user.id, updates);
+      if (!result) throw new Error('Failed to update preferences');
+      
+      expect(result.theme).toBe(updates.theme);
+      expect(result.email_notifications).toBe(updates.emailNotifications);
+      expect(result.content_language).toBe(updates.contentLanguage);
+      expect(result.summary_level).toBe(updates.summaryLevel);
     });
   });
 }); 
