@@ -1,32 +1,23 @@
-import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
-import { createTestUser } from '../../__tests__/setup';
-import { pool } from '../../services/db';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { pool, User } from '../db';
+import { cleanupDatabase } from '../../__tests__/setup';
 
 describe('Database Service', () => {
-  let testUser: any;
-
-  // Set up test user once for all tests
-  beforeAll(async () => {
-    // Create test user with preferences in a single query
-    testUser = await createTestUser();
-  });
-
-  // Clean up database before each test
-  beforeEach(async () => {
-    await pool.query('TRUNCATE TABLE users CASCADE');
-  });
-
   describe('User Operations', () => {
-    it('should create a new user', async () => {
-      const result = await pool.query(
-        'INSERT INTO users (google_id, email, display_name) VALUES ($1, $2, $3) RETURNING *',
-        ['new_test_id', 'new@example.com', 'New Test User']
-      );
-      const user = result.rows[0];
+    beforeEach(async () => {
+      await cleanupDatabase();
+    });
 
-      expect(user).toBeDefined();
-      expect(user.google_id).toBe('new_test_id');
-      expect(user.email).toBe('new@example.com');
+    it('should create a new user', async () => {
+      const result = await pool.query<User>(
+        `INSERT INTO users (google_id, email, display_name, avatar_url)
+         VALUES ($1, $2, $3, $4)
+         RETURNING *`,
+        ['test-id', 'test@example.com', 'Test User', 'https://example.com/avatar.jpg']
+      );
+
+      expect(result.rows[0]).toBeDefined();
+      expect(result.rows[0].google_id).toBe('test-id');
     });
 
     it('should find a user by Google ID', async () => {
@@ -61,6 +52,10 @@ describe('Database Service', () => {
   });
 
   describe('User Preferences', () => {
+    beforeEach(async () => {
+      await cleanupDatabase();
+    });
+
     it('should get user preferences', async () => {
       const userResult = await pool.query(
         'INSERT INTO users (google_id, email, display_name) VALUES ($1, $2, $3) RETURNING *',

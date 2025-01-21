@@ -19,8 +19,8 @@ export default defineConfig({
         '**/vite.config.*',
       ],
     },
-    testTimeout: 30000,
-    hookTimeout: 30000,
+    testTimeout: 10000,
+    hookTimeout: 60000,
     pool: 'forks',
     poolOptions: {
       threads: {

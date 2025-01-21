@@ -36,7 +36,7 @@ export class LoginHistoryService {
 
     try {
       await withTransaction(async (client: PoolClient) => {
-        await client.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
+        await client.query('SET TRANSACTION ISOLATION LEVEL READ COMMITTED');
 
         // For failed attempts, we don't need a user ID
         if (!attempt.success) {
@@ -86,7 +86,7 @@ export class LoginHistoryService {
 
     try {
       return await withTransaction(async (client: PoolClient) => {
-        await client.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
+        await client.query('SET TRANSACTION ISOLATION LEVEL READ COMMITTED');
 
         // Get login history for both successful and failed attempts
         const result = await client.query<Omit<LoginHistoryEntry, 'loginTime'> & { loginTime: string }>(`
@@ -124,7 +124,7 @@ export class LoginHistoryService {
 
     try {
       return await withTransaction(async (client: PoolClient) => {
-        await client.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
+        await client.query('SET TRANSACTION ISOLATION LEVEL READ COMMITTED');
 
         // First verify that the user exists
         const userExists = await client.query(

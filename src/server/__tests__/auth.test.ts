@@ -39,44 +39,42 @@ describe('Authentication Flow', () => {
     // Create reusable authenticated agent
     agent = request.agent(app);
 
-    // Initialize session with test user
-    const sessionResponse = await agent
-      .post('/api/auth/session')
-      .send({ 
-        passport: {
-          user: testUser.id
-        }
-      });
-
-    if (sessionResponse.status !== 200) {
-      console.error('Session initialization failed:', sessionResponse.body);
-      throw new Error(`Failed to initialize session: ${sessionResponse.body.error || 'Unknown error'}`);
-    }
-
-    // Wait for session to be saved
-    await sleep(500);
-
-    // Verify session was initialized with retries
-    let verifyResponse;
+    // Initialize session with test user with retries
+    let sessionResponse;
     let retries = 0;
     const maxRetries = 5;
 
     while (retries < maxRetries) {
-      verifyResponse = await agent.get('/api/auth/verify');
-      console.log('Session verification response:', verifyResponse.body);
-      
-      if (verifyResponse.body.authenticated && verifyResponse.body.user?.id === testUser.id) {
+      sessionResponse = await agent
+        .post('/api/auth/session')
+        .send({ 
+          passport: {
+            user: testUser.id
+          }
+        });
+
+      if (sessionResponse.status === 200 && sessionResponse.body.authenticated) {
         break;
       }
 
+      console.log(`Session initialization attempt ${retries + 1} failed:`, sessionResponse.body);
       retries++;
       if (retries < maxRetries) {
-        await sleep(500);
+        await sleep(1000); // Increased sleep time
       }
     }
 
-    if (!verifyResponse?.body.authenticated || verifyResponse.body.user?.id !== testUser.id) {
-      console.error('Session verification failed:', verifyResponse?.body);
+    if (!sessionResponse || sessionResponse.status !== 200) {
+      console.error('Session initialization failed:', sessionResponse?.body);
+      throw new Error(`Failed to initialize session: ${sessionResponse?.body?.error || 'Unknown error'}`);
+    }
+
+    // Verify session was initialized
+    const verifyResponse = await agent.get('/api/auth/verify');
+    console.log('Session verification response:', verifyResponse.body);
+
+    if (!verifyResponse.body.authenticated || verifyResponse.body.user?.id !== testUser.id) {
+      console.error('Session verification failed:', verifyResponse.body);
       throw new Error('Session initialization failed: User not authenticated');
     }
   });
@@ -101,8 +99,10 @@ describe('Authentication Flow', () => {
     // Use the authenticated agent to test the callback
     const response = await agent
       .get('/api/auth/google/callback')
-      .query({ code: 'valid-code' })
-      .send({ profile: mockProfile });
+      .query({ 
+        code: 'valid-code',
+        profile: JSON.stringify(mockProfile)
+      });
 
     expect(response.status).toBe(302);
     expect(response.header.location).toBe('/');

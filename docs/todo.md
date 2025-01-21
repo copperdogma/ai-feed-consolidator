@@ -9,13 +9,14 @@
   - [x] Set up PostgreSQL schema for users
   - [x] Create user preferences table
   - [x] Implement user profile storage in application code
-  - [ ] Add login history tracking in application code
+  - [x] Add login history tracking in application code
 
 - Enhanced Security Features
   - [ ] Implement CSRF protection
   - [ ] Add rate limiting for auth endpoints
   - [ ] Set up audit logging
   - [ ] Configure production cookie settings
+  - [ ] Remove hardcoded test credentials and use environment variables consistently
 
 - Production Deployment Setup
   - [ ] Configure HTTPS endpoints
@@ -37,6 +38,9 @@
   - [ ] Add database integration tests
   - [ ] Implement API endpoint tests
   - [ ] Add performance tests
+  - [x] Optimize test database cleanup process
+  - [x] Fix transaction lock contention in tests
+  - [x] Reduce auth error test execution time
 
 - Test Infrastructure
   - [x] Configure Vitest with JSDOM
@@ -105,11 +109,19 @@
   - [x] Create authentication documentation
   - [x] Implement comprehensive auth tests
   - [x] Add logout flow testing
+  - [x] Add login history tracking implementation
 
 - Research
   - [x] YouTube Integration research
   - [x] Evaluate open-source solutions
   - [x] Document findings in design.md
+
+- Testing
+  - [x] Optimize test database cleanup process
+  - [x] Fix transaction lock contention in tests
+  - [x] Reduce auth error test execution time
+  - [x] Improve session initialization reliability
+  - [x] Add retry mechanisms for flaky tests
 
 ## Medium Priority
 - [ ] Design and implement personal sync system

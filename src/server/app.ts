@@ -7,6 +7,7 @@ import { UserService } from './services/user';
 import { LoginHistoryService } from './services/login-history';
 import connectMemoryStore from 'memorystore';
 import { requireAuth } from './middleware/auth';
+import { config } from './config';
 
 const MemoryStore = connectMemoryStore(session);
 
@@ -38,7 +39,7 @@ export function createApp(): Express {
   
   // Configure session middleware
   app.use(session({
-    secret: process.env.SESSION_SECRET || 'test-secret',
+    secret: config.sessionSecret,
     resave: false,
     saveUninitialized: false,
     store: new MemoryStore({
@@ -46,7 +47,7 @@ export function createApp(): Express {
       stale: false
     }),
     cookie: {
-      secure: false,
+      secure: process.env.NODE_ENV === 'production',
       httpOnly: true,
       maxAge: 24 * 60 * 60 * 1000
     },
@@ -86,8 +87,8 @@ export function createApp(): Express {
 
   // Google OAuth Strategy
   passport.use(new GoogleStrategy({
-    clientID: process.env.GOOGLE_CLIENT_ID || 'test-client-id',
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET || 'test-client-secret',
+    clientID: config.googleClientId,
+    clientSecret: config.googleClientSecret,
     callbackURL: '/api/auth/google/callback'
   }, async (accessToken, refreshToken, profile, done) => {
     try {
@@ -123,11 +124,20 @@ export function createApp(): Express {
       // In test environment, simulate successful authentication
       if (process.env.NODE_ENV === 'test' && req.query.code === 'valid-code') {
         try {
-          // In test mode, we should already have a user from session initialization
-          const testUser = req.user;
+          // Parse the mock profile from query parameter
+          const mockProfile = req.query.profile ? JSON.parse(req.query.profile as string) : null;
+          if (!mockProfile || !mockProfile.id) {
+            console.error('No mock profile provided');
+            res.status(400).json({ error: 'No mock profile provided' });
+            return;
+          }
+
+          // Look up the test user by Google ID
+          const result = await pool.query('SELECT * FROM users WHERE google_id = $1', [mockProfile.id]);
+          const testUser = result.rows[0];
           if (!testUser) {
-            console.error('No test user found in session');
-            res.status(401).json({ error: 'No test user found' });
+            console.error('Test user not found:', { googleId: mockProfile.id });
+            res.status(401).json({ error: 'Test user not found' });
             return;
           }
 
@@ -180,6 +190,52 @@ export function createApp(): Express {
     })
   );
 
+  // Session verification endpoint
+  app.get('/api/auth/verify', async (req: Request, res: Response) => {
+    // Log session state for debugging
+    console.debug('Session verification request:', {
+      sessionId: req.sessionID,
+      hasSession: !!req.session,
+      hasPassport: !!req.session?.passport,
+      isAuthenticated: req.isAuthenticated(),
+      user: req.user
+    });
+
+    // Record login attempt
+    try {
+      const user = req.user as User | undefined;
+      await LoginHistoryService.recordLoginAttempt({
+        userId: user?.id || null,
+        success: !!user,
+        ipAddress: req.ip || req.socket.remoteAddress || '',
+        userAgent: req.get('user-agent') || '',
+        loginTime: new Date(),
+        requestPath: req.path,
+        failureReason: user ? undefined : 'Not authenticated'
+      });
+    } catch (error) {
+      console.error('Failed to record login attempt:', error);
+      // Don't fail the request just because we couldn't record it
+    }
+
+    // Return session state
+    const response = {
+      authenticated: req.isAuthenticated(),
+      session: req.session,
+      passport: req.session?.passport,
+      user: req.user,
+      sessionId: req.sessionID
+    };
+
+    console.debug('Session verification response:', response);
+
+    if (req.isAuthenticated()) {
+      res.json(response);
+    } else {
+      res.status(401).json(response);
+    }
+  });
+
   // Session initialization endpoint for tests
   app.post('/api/auth/session', (async (req: Request, res: Response) => {
     if (process.env.NODE_ENV !== 'test') {
@@ -205,13 +261,7 @@ export function createApp(): Express {
         return;
       }
 
-      // Ensure session exists
-      if (!req.session) {
-        res.status(500).json({ error: 'Session not initialized' });
-        return;
-      }
-
-      // Log the user in and wait for session to be saved
+      // Initialize session
       await new Promise<void>((resolve, reject) => {
         req.login(user, (err) => {
           if (err) {
@@ -230,7 +280,6 @@ export function createApp(): Express {
         });
       });
 
-      // Log session state
       console.log('Session initialized successfully:', {
         sessionId: req.sessionID,
         passport: req.session.passport,
@@ -238,48 +287,18 @@ export function createApp(): Express {
         authenticated: req.isAuthenticated()
       });
 
-      res.json({ 
-        success: true,
-        sessionId: req.sessionID,
+      res.json({
+        authenticated: req.isAuthenticated(),
+        session: req.session,
         passport: req.session.passport,
         user: req.user,
-        authenticated: req.isAuthenticated()
-      });
-    } catch (err: any) {
-      console.error('Session initialization failed:', err);
-      res.status(500).json({ error: 'Failed to initialize session', details: err.message });
-    }
-  }) as RequestHandler);
-
-  // Session verification endpoint
-  app.get('/api/auth/verify', ((req: Request, res: Response) => {
-    // Log session state for debugging
-    console.log('Session verification request:', {
-      sessionId: req.sessionID,
-      hasSession: !!req.session,
-      hasPassport: !!req.session?.passport,
-      isAuthenticated: req.isAuthenticated(),
-      user: req.user
-    });
-
-    if (!req.isAuthenticated()) {
-      res.status(401).json({
-        authenticated: false,
-        session: null,
-        passport: null,
-        user: null,
         sessionId: req.sessionID
       });
-      return;
-    }
 
-    res.json({
-      authenticated: true,
-      session: req.session,
-      passport: req.session?.passport,
-      user: req.user,
-      sessionId: req.sessionID
-    });
+    } catch (err) {
+      console.error('Error initializing session:', err);
+      res.status(500).json({ error: 'Failed to initialize session' });
+    }
   }) as RequestHandler);
 
   // Protected route example

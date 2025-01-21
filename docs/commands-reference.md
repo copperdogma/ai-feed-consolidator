@@ -262,7 +262,7 @@ flyctl postgres connect -a ai-feed-consolidator-postgres
 flyctl proxy 15432:5432 -a ai-feed-consolidator-postgres
 
 # Connect via psql through proxy (new terminal)
-psql "postgresql://postgres:PASSWORD@localhost:15432"
+psql "postgresql://<username>:<password>@<host>:<port>"
 
 # Common psql commands
 \dt                           # List tables
@@ -299,7 +299,7 @@ Required environment variables for different environments:
 ### Development
 ```bash
 NODE_ENV=development
-DATABASE_URL=postgresql://postgres:postgres@db:5433/aifeed
+DATABASE_URL=postgres://<username>:<password>@<host>:<port>/<database>
 ```
 
 ### Testing
@@ -311,7 +311,7 @@ DATABASE_URL=postgresql://postgres:postgres@db:5433/aifeed_test
 ### Production
 ```bash
 NODE_ENV=production
-DATABASE_URL=postgres://postgres:password@ai-feed-consolidator-postgres.internal:5432/aifeed
+DATABASE_URL=postgres://<username>:<password>@<host>:<port>/<database>
 PORT=8080
 ORIGIN=https://ai-feed-consolidator.chat
 ```

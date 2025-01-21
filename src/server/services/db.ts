@@ -241,4 +241,66 @@ export async function updateUserPreferences(
 
     return result.rows[0] || null;
   });
+}
+
+// Function to initialize database schema
+export async function initializeDatabase(): Promise<void> {
+  return withTransaction(async (client) => {
+    // Create users table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        google_id TEXT UNIQUE NOT NULL,
+        email TEXT NOT NULL,
+        display_name TEXT NOT NULL,
+        avatar_url TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create user_preferences table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS user_preferences (
+        user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        theme TEXT NOT NULL DEFAULT 'light',
+        email_notifications BOOLEAN NOT NULL DEFAULT true,
+        content_language TEXT NOT NULL DEFAULT 'en',
+        summary_level INTEGER NOT NULL DEFAULT 1,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create sessions table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS sessions (
+        sid TEXT PRIMARY KEY,
+        sess JSON NOT NULL,
+        expire TIMESTAMP WITH TIME ZONE NOT NULL
+      )
+    `);
+
+    // Create login_history table with additional columns
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS login_history (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        success BOOLEAN NOT NULL,
+        ip_address TEXT,
+        user_agent TEXT,
+        login_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        failure_reason TEXT,
+        request_path TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create indexes for performance
+    await client.query('CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id)');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_sessions_expire ON sessions(expire)');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_login_history_user_id ON login_history(user_id)');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_login_history_created_at ON login_history(created_at)');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_login_history_login_time ON login_history(login_time)');
+  });
 } 
