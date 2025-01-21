@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
-import { db, createTestUser, cleanDatabase } from '../../__tests__/setup';
+import { cleanupDatabase as cleanDatabase, createTestUser } from '../../__tests__/setup';
+import { pool } from '../../services/db';
 import { UserService } from '../user';
 import type { Profile } from 'passport-google-oauth20';
 
@@ -8,7 +9,7 @@ describe('UserService', () => {
 
   // Clean up database before each test
   beforeEach(async () => {
-    await cleanDatabase(db);
+    await cleanDatabase();
   });
 
   describe('findOrCreateGoogleUser', () => {
@@ -86,10 +87,11 @@ describe('UserService', () => {
 
     it('should throw if preferences not found', async () => {
       // Create user without preferences
-      const user = await db.one(
+      const result = await pool.query(
         'INSERT INTO users (google_id, email, display_name) VALUES ($1, $2, $3) RETURNING *',
         ['no_prefs_id', 'no_prefs@example.com', 'No Prefs User']
       );
+      const user = result.rows[0];
 
       const profile: Profile = {
         id: user.google_id,
@@ -128,13 +130,14 @@ describe('UserService', () => {
 
     it('should return null if preferences not found', async () => {
       // Create user without preferences
-      const user = await db.one(
+      const result = await pool.query(
         'INSERT INTO users (google_id, email, display_name) VALUES ($1, $2, $3) RETURNING *',
         ['no_prefs_profile', 'no_prefs_profile@example.com', 'No Prefs Profile User']
       );
+      const user = result.rows[0];
 
-      const result = await UserService.getUserProfile(user.id);
-      expect(result).toBeNull();
+      const result2 = await UserService.getUserProfile(user.id);
+      expect(result2).toBeNull();
     });
   });
 
@@ -143,18 +146,17 @@ describe('UserService', () => {
       const user = await createTestUser();
       const updates = {
         theme: 'dark',
-        emailNotifications: false,
-        contentLanguage: 'fr',
-        summaryLevel: 2
+        email_notifications: false,
+        content_language: 'es',
+        summary_level: 2
       };
 
       const result = await UserService.updatePreferences(user.id, updates);
-      if (!result) throw new Error('Failed to update preferences');
-      
-      expect(result.theme).toBe(updates.theme);
-      expect(result.email_notifications).toBe(updates.emailNotifications);
-      expect(result.content_language).toBe(updates.contentLanguage);
-      expect(result.summary_level).toBe(updates.summaryLevel);
+      expect(result).not.toBeNull();
+      expect(result!.theme).toBe(updates.theme);
+      expect(result!.email_notifications).toBe(updates.email_notifications);
+      expect(result!.content_language).toBe(updates.content_language);
+      expect(result!.summary_level).toBe(updates.summary_level);
     });
   });
 }); 

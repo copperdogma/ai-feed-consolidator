@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import request from 'supertest';
-import { db, createTestUser, cleanDatabase } from './setup';
+import { cleanupDatabase as cleanDatabase, createTestUser } from './setup';
 import type { User } from '../services/db';
 import { createApp } from '../app';
+import { pool } from '../services/db';
 
 describe('Auth History', () => {
   let app: ReturnType<typeof createApp>;
@@ -11,8 +12,8 @@ describe('Auth History', () => {
 
   beforeEach(async () => {
     try {
-      await cleanDatabase(db);
-      app = createApp(db);
+      await cleanDatabase();
+      app = createApp();
       
       // Create test user with preferences
       testUser = await createTestUser();
@@ -47,7 +48,7 @@ describe('Auth History', () => {
       }
     } catch (error) {
       console.error('Setup error:', error);
-      await cleanDatabase(db);
+      await cleanDatabase();
       throw error;
     }
   });

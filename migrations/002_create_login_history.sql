@@ -7,7 +7,9 @@ CREATE TABLE IF NOT EXISTS login_history (
     user_agent TEXT,
     success BOOLEAN NOT NULL,
     failure_reason TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    request_path TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Add indexes
@@ -20,4 +22,11 @@ COMMENT ON COLUMN login_history.user_id IS 'User ID for successful logins, NULL 
 COMMENT ON COLUMN login_history.ip_address IS 'IP address of the login attempt';
 COMMENT ON COLUMN login_history.user_agent IS 'Browser/client user agent string';
 COMMENT ON COLUMN login_history.success IS 'Whether the login attempt was successful';
-COMMENT ON COLUMN login_history.failure_reason IS 'Reason for failed login attempts'; 
+COMMENT ON COLUMN login_history.failure_reason IS 'Reason for failed login attempts';
+COMMENT ON COLUMN login_history.request_path IS 'Request path of the login attempt';
+
+-- Add triggers
+CREATE TRIGGER update_login_history_updated_at
+  BEFORE UPDATE ON login_history
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column(); 

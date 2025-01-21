@@ -1,7 +1,5 @@
 import { beforeAll, afterAll, expect } from 'vitest';
 import { config } from 'dotenv';
-import pgPromise from 'pg-promise';
-import type { IDatabase, IMain, ITask } from 'pg-promise';
 import { Request } from 'express';
 import { User } from '../services/db';
 import supertest from 'supertest';
@@ -11,6 +9,8 @@ import { createApp } from '../app';
 import { promises as fs } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { Pool, PoolClient } from 'pg';
+import { pool, withTransaction } from '../services/db';
 
 // Load environment variables
 config({ path: '.env.test' });
@@ -24,66 +24,85 @@ process.env.GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || 'test-cli
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Initialize pg-promise with custom settings
-const pgp: IMain = pgPromise({
-  query(e) {
-    console.log('QUERY:', e.query);
-  }
-});
-
-// Create db instance
-export const db: IDatabase<any> = pgp(process.env.DATABASE_URL || '');
-
 // Run migrations before any tests
 beforeAll(async () => {
-  await resetDatabase(db);
+  await resetDatabase();
 });
 
-// Constants for cleanup and retries
-const BASE_CLEANUP_LOCK_ID = 41200;
-const CLEANUP_TIMEOUT = 120000; // 120 seconds
-const LOCK_TIMEOUT = 60000; // 60 seconds
-const MAX_RETRIES = 3;
+// Constants for cleanup
+const CLEANUP_LOCK_ID = 41724;
 const RETRY_DELAY_BASE = 1000; // 1 second
 
-// Tables in dependency order (children first)
+// Tables in dependency order (children first, parents last)
 const TABLES_IN_ORDER = [
-  'login_history',     // No dependencies
-  'user_preferences',  // Depends on users
-  'sessions',         // Depends on users
-  'users'            // Parent table
-];
+  'login_history',
+  'user_preferences',
+  'sessions',
+  'users'
+] as const;
 
 // Helper function to wait with exponential backoff and jitter
 async function wait(attempt: number): Promise<void> {
-  const jitter = Math.random() * RETRY_DELAY_BASE;
-  const delay = Math.pow(2, attempt - 1) * RETRY_DELAY_BASE + jitter;
-  await new Promise(resolve => setTimeout(resolve, delay));
+  const delay = Math.min(RETRY_DELAY_BASE * Math.pow(2, attempt), 10000);
+  const jitter = Math.random() * 100;
+  await new Promise(resolve => setTimeout(resolve, delay + jitter));
 }
 
-// Create a test user for use in tests
+// Create a test user for authentication tests
 export async function createTestUser(): Promise<User> {
-  return db.tx<User>(async (t: ITask<User>) => {
-    // Create the user first
-    const testUser = await t.one<User>(`
-      INSERT INTO users (google_id, email, display_name, avatar_url)
-      VALUES ($1, $2, $3, $4)
-      RETURNING *
-    `, ['test-google-id', 'test@example.com', 'Test User', 'https://example.com/picture.jpg']);
+  try {
+    return await withTransaction(async (client: PoolClient) => {
+      await client.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
 
-    // Then create their preferences
-    await t.none(`
-      INSERT INTO user_preferences (user_id, theme, email_notifications, content_language, summary_level)
-      VALUES ($1, $2, $3, $4, $5)
-    `, [testUser.id, 'light', true, 'en', 1]);
+      // Create new user with preferences using UPSERT
+      const result = await client.query<User>(
+        `INSERT INTO users (google_id, email, display_name, avatar_url)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (google_id) 
+         DO UPDATE SET 
+           email = EXCLUDED.email,
+           display_name = EXCLUDED.display_name,
+           avatar_url = EXCLUDED.avatar_url
+         RETURNING *`,
+        ['test-google-id', 'test@example.com', 'Test User', 'https://example.com/picture.jpg']
+      );
 
-    return testUser;
-  });
+      const user = result.rows[0];
+
+      // Create or update user preferences
+      await client.query(
+        `INSERT INTO user_preferences (user_id, theme, email_notifications, content_language, summary_level)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (user_id)
+         DO UPDATE SET
+           theme = EXCLUDED.theme,
+           email_notifications = EXCLUDED.email_notifications,
+           content_language = EXCLUDED.content_language,
+           summary_level = EXCLUDED.summary_level`,
+        [user.id, 'light', true, 'en', 1]
+      );
+
+      return user;
+    });
+  } catch (error) {
+    console.error('Error creating test user:', error);
+    throw error;
+  }
+}
+
+// Verify that a test user exists
+export async function verifyTestUser(userId: number): Promise<User | null> {
+  const result = await pool.query<User>(
+    'SELECT * FROM users WHERE id = $1',
+    [userId]
+  );
+
+  return result.rows[0] || null;
 }
 
 // Create an authenticated agent for testing protected routes
 export async function createAuthenticatedAgent(): Promise<ReturnType<typeof supertest.agent>> {
-  const app = createApp(db);
+  const app = createApp();
   const agent = supertest.agent(app);
   const testUser = await createTestUser();
 
@@ -103,151 +122,196 @@ export async function createAuthenticatedAgent(): Promise<ReturnType<typeof supe
   return agent;
 }
 
-function getCleanupLockId(testFilePath: string): number {
-  // Use a hash of the test file path to generate a unique lock ID
-  const hash = testFilePath.split('').reduce((acc, char) => {
-    return ((acc << 5) - acc) + char.charCodeAt(0);
-  }, 0);
-  return BASE_CLEANUP_LOCK_ID + (Math.abs(hash) % 1000);
-}
+export async function cleanupDatabase() {
+  let client: PoolClient | null = null;
+  let retries = 0;
+  const maxRetries = 3;
 
-async function acquireCleanupLock(db: IDatabase<any>, testFilePath: string): Promise<boolean> {
-  const lockId = getCleanupLockId(testFilePath);
-  return db.one('SELECT pg_try_advisory_lock($1) as acquired', [lockId])
-    .then(result => result.acquired);
-}
+  while (retries < maxRetries) {
+    try {
+      if (!client) {
+        client = await pool.connect();
+      }
 
-async function releaseCleanupLock(db: IDatabase<any>, testFilePath: string): Promise<void> {
-  const lockId = getCleanupLockId(testFilePath);
-  // pg_advisory_unlock returns a boolean indicating success
-  await db.one('SELECT pg_advisory_unlock($1) as unlocked', [lockId], r => r.unlocked);
-}
+      // Try to acquire the cleanup lock
+      const lockResult = await client.query('SELECT pg_try_advisory_lock($1) as acquired', [CLEANUP_LOCK_ID]);
 
-// Clean the database before tests
-export async function cleanDatabase(db: IDatabase<any>, testFilePath?: string): Promise<void> {
-  const filePath = testFilePath || getTestFilePath();
-  const lockId = getCleanupLockId(filePath);
+      if (!lockResult.rows[0].acquired) {
+        console.log('Could not acquire cleanup lock, retrying...');
+        await client.query('SELECT pg_advisory_lock($1)', [CLEANUP_LOCK_ID]);
+      }
 
-  // First try to acquire the cleanup lock
-  const lockAcquired = await db.one('SELECT pg_try_advisory_lock($1) as acquired', [lockId], r => r.acquired);
-  if (!lockAcquired) {
-    throw new Error('Could not acquire cleanup lock');
-  }
-
-  try {
-    await db.tx(async t => {
-      // Set aggressive statement timeout
-      await t.none('SET statement_timeout = 5000');
+      // Start a new transaction
+      await client.query('BEGIN');
       
-      // Temporarily disable triggers and foreign key checks
-      await t.none('SET session_replication_role = replica');
+      // Use READ COMMITTED to allow other transactions to proceed
+      await client.query('SET TRANSACTION ISOLATION LEVEL READ COMMITTED');
+      await client.query('SET statement_timeout = 5000'); // 5 seconds
+      await client.query('SET session_replication_role = replica'); // Disable triggers and foreign keys
 
-      // Log start of cleanup
-      console.log('Starting database cleanup...');
-
-      // Truncate tables in order (children first)
+      // Clean each table individually
       for (const table of TABLES_IN_ORDER) {
         try {
-          await t.none(`TRUNCATE TABLE "${table}" CASCADE`);
+          // Lock and clean one table at a time
+          await client.query(`LOCK TABLE "${table}" IN ACCESS EXCLUSIVE MODE NOWAIT`);
+          await client.query(`TRUNCATE TABLE "${table}" CASCADE`);
           console.log(`Cleaned table: ${table}`);
         } catch (error: any) {
-          if (error?.code === '42P01') { // Table doesn't exist
-            console.log(`Table ${table} does not exist, skipping`);
-            continue;
+          if (error.code === '55P03') { // Lock not available
+            console.log(`Waiting for lock on table: ${table}`);
+            await client.query(`LOCK TABLE "${table}" IN ACCESS EXCLUSIVE MODE`);
+            await client.query(`TRUNCATE TABLE "${table}" CASCADE`);
+            console.log(`Cleaned table: ${table} after waiting`);
+          } else if (error.code === '25P02') { // Current transaction is aborted
+            console.log('Transaction aborted, rolling back and retrying...');
+            await client.query('ROLLBACK');
+            throw error; // This will trigger a retry
+          } else {
+            throw error;
           }
-          throw error;
         }
       }
 
-      // Re-enable triggers and foreign key checks
-      await t.none('SET session_replication_role = default');
-      console.log('Database cleanup completed');
-    });
-  } finally {
-    // Always release the lock
-    await releaseCleanupLock(db, filePath);
+      await client.query('SET session_replication_role = default');
+      await client.query('COMMIT');
+      console.log('Database cleanup completed successfully');
+      return; // Success - exit the retry loop
+    } catch (error: any) {
+      console.error('Error during cleanup:', error);
+      
+      if (client) {
+        try {
+          // Always try to rollback on error
+          await client.query('ROLLBACK').catch(() => {});
+          
+          // If we got a transaction abort, release and get a new client
+          if (error.code === '25P02') {
+            client.release();
+            client = null;
+          }
+        } catch (rollbackError) {
+          console.error('Error during rollback:', rollbackError);
+        }
+      }
+      
+      if (retries < maxRetries - 1) {
+        retries++;
+        console.log(`Retrying cleanup (attempt ${retries + 1}/${maxRetries})...`);
+        await wait(retries);
+      } else {
+        throw error;
+      }
+    } finally {
+      if (client) {
+        try {
+          // Release the advisory lock if we have it
+          await client.query('SELECT pg_advisory_unlock($1)', [CLEANUP_LOCK_ID]).catch(() => {});
+          client.release();
+          client = null;
+        } catch (error) {
+          console.error('Error releasing cleanup resources:', error);
+        }
+      }
+    }
   }
 }
 
 // Add after cleanDatabase function
-export async function resetDatabase(db: IDatabase<any>, testFilePath?: string): Promise<void> {
-  const filePath = testFilePath || getTestFilePath();
-  const lockId = getCleanupLockId(filePath);
+export async function resetDatabase(): Promise<void> {
+  const MIGRATION_LOCK_ID = 42000;
+  let client: PoolClient | null = null;
+  let retries = 0;
+  const maxRetries = 3;
 
-  // First try to acquire the cleanup lock
-  const lockAcquired = await db.one('SELECT pg_try_advisory_lock($1) as acquired', [lockId], r => r.acquired);
-  if (!lockAcquired) {
-    throw new Error('Could not acquire cleanup lock');
-  }
+  while (retries < maxRetries) {
+    try {
+      if (!client) {
+        client = await pool.connect();
+      }
 
-  try {
-    // Drop all tables
-    await db.none(`
-      DO $$ DECLARE
-        r RECORD;
-      BEGIN
-        FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = current_schema()) LOOP
-          EXECUTE 'DROP TABLE IF EXISTS ' || quote_ident(r.tablename) || ' CASCADE';
-        END LOOP;
-      END $$;
-    `);
+      // First try to acquire the migration lock
+      const lockResult = await client.query('SELECT pg_try_advisory_lock($1) as acquired', [MIGRATION_LOCK_ID]);
+      if (!lockResult.rows[0].acquired) {
+        console.log('Waiting for migration lock...');
+        await client.query('SELECT pg_advisory_lock($1)', [MIGRATION_LOCK_ID]);
+      }
 
-    // Run all migrations
-    await runMigrations(db);
-  } finally {
-    // Always release the lock
-    await releaseCleanupLock(db, filePath);
-  }
-}
+      await client.query('BEGIN');
 
-// Extract migration running logic to its own function
-async function runMigrations(db: IDatabase<any>): Promise<void> {
-  try {
-    // Create migrations table if it doesn't exist
-    await db.none(`
-      CREATE TABLE IF NOT EXISTS migrations (
-        id SERIAL PRIMARY KEY,
-        name VARCHAR(255) NOT NULL UNIQUE,
-        executed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
+      // Drop all tables in a single transaction
+      await client.query(`
+        DO $$ DECLARE
+          r RECORD;
+        BEGIN
+          FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = current_schema()) LOOP
+            EXECUTE 'DROP TABLE IF EXISTS ' || quote_ident(r.tablename) || ' CASCADE';
+          END LOOP;
+        END $$;
+      `);
 
-    // Get list of migration files
-    const migrationsDir = join(__dirname, '../../../migrations');
-    const files = await fs.readdir(migrationsDir);
-    const sqlFiles = files.filter(f => f.endsWith('.sql')).sort();
+      // Create migrations table if it doesn't exist
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS migrations (
+          id SERIAL PRIMARY KEY,
+          name VARCHAR(255) NOT NULL UNIQUE,
+          executed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
 
-    // Get executed migrations
-    const executedMigrations = await db.map(
-      'SELECT name FROM migrations',
-      [],
-      (row: { name: string }) => row.name
-    );
-    const executedNames = new Set(executedMigrations);
+      // Get list of migration files
+      const migrationsDir = join(__dirname, '../../../migrations');
+      const files = await fs.readdir(migrationsDir);
+      const sqlFiles = files.filter(f => f.endsWith('.sql')).sort();
 
-    // Run pending migrations
-    for (const file of sqlFiles) {
-      if (!executedNames.has(file)) {
-        console.log(`Running migration: ${file}`);
-        const filePath = join(migrationsDir, file);
-        const sql = await fs.readFile(filePath, 'utf-8');
-        console.log(`Migration SQL for ${file}:`, sql);
+      // Get executed migrations
+      const executedMigrations = await client.query('SELECT name FROM migrations');
+      const executedNames = new Set(executedMigrations.rows.map(m => m.name));
 
-        await db.tx(async t => {
-          await t.none(sql);
-          await t.none(
+      // Run pending migrations
+      for (const file of sqlFiles) {
+        if (!executedNames.has(file)) {
+          console.log(`Running migration: ${file}`);
+          const filePath = join(migrationsDir, file);
+          const sql = await fs.readFile(filePath, 'utf-8');
+          console.log(`Migration SQL for ${file}:`, sql);
+
+          await client.query(sql);
+          await client.query(
             'INSERT INTO migrations (name) VALUES ($1)',
             [file]
           );
-        });
-        console.log(`Completed migration: ${file}`);
+          console.log(`Completed migration: ${file}`);
+        }
+      }
+
+      await client.query('COMMIT');
+      console.log('All migrations completed successfully');
+      return; // Success - exit the retry loop
+    } catch (error) {
+      console.error('Error during database reset:', error);
+      if (client) {
+        await client.query('ROLLBACK').catch(() => {}); // Ignore rollback errors
+      }
+      
+      if (retries < maxRetries - 1) {
+        retries++;
+        console.log(`Retrying database reset (attempt ${retries + 1}/${maxRetries})...`);
+        await wait(retries);
+      } else {
+        throw error;
+      }
+    } finally {
+      if (client) {
+        try {
+          // Release the advisory lock if we have it
+          await client.query('SELECT pg_advisory_unlock($1)', [MIGRATION_LOCK_ID]).catch(() => {});
+          client.release();
+          client = null;
+        } catch (error) {
+          console.error('Error releasing migration resources:', error);
+        }
       }
     }
-
-    console.log('All migrations completed successfully');
-  } catch (error) {
-    console.error('Migration failed:', error);
-    throw error;
   }
 }
 
@@ -257,5 +321,5 @@ function getTestFilePath(): string {
 }
 
 afterAll(async () => {
-  await db.$pool.end(); // Close all connections in the pool
+  await pool.end(); // Close all connections in the pool
 }); 

@@ -1,11 +1,12 @@
-import express, { Request, Response, NextFunction, RequestHandler } from 'express';
+import express, { Express, Request, Response, NextFunction, RequestHandler } from 'express';
 import session from 'express-session';
 import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
-import { User } from './services/db';
-import { requireAuth } from './middleware/auth';
-import connectMemoryStore from 'memorystore';
+import { pool, User } from './services/db';
+import { UserService } from './services/user';
 import { LoginHistoryService } from './services/login-history';
+import connectMemoryStore from 'memorystore';
+import { requireAuth } from './middleware/auth';
 
 const MemoryStore = connectMemoryStore(session);
 
@@ -25,11 +26,12 @@ declare global {
   }
 }
 
-export function createApp(db: any) {
-  // Initialize services
-  LoginHistoryService.initialize(db);
+// Create Express app instance
+const app = express();
 
-  const app = express();
+export function createApp(): Express {
+  // Initialize services
+  LoginHistoryService.initialize(pool);
 
   // Middleware
   app.use(express.json());
@@ -37,17 +39,19 @@ export function createApp(db: any) {
   // Configure session middleware
   app.use(session({
     secret: process.env.SESSION_SECRET || 'test-secret',
-    resave: true,
-    saveUninitialized: true,
+    resave: false,
+    saveUninitialized: false,
     store: new MemoryStore({
-      checkPeriod: 86400000 // prune expired entries every 24h
+      checkPeriod: 86400000,
+      stale: false
     }),
     cookie: {
-      secure: false, // Allow non-HTTPS in test/dev
+      secure: false,
       httpOnly: true,
-      maxAge: 24 * 60 * 60 * 1000 // 24 hours
+      maxAge: 24 * 60 * 60 * 1000
     },
-    name: 'connect.sid'
+    name: 'connect.sid',
+    rolling: true
   }));
 
   // Initialize passport and restore authentication state from session
@@ -57,21 +61,21 @@ export function createApp(db: any) {
   // Passport serialization
   passport.serializeUser((user: Express.User, done) => {
     const typedUser = user as User;
+    console.log('Serializing user:', { userId: typedUser.id });
     done(null, typedUser.id);
   });
 
   passport.deserializeUser(async (id: number, done) => {
     try {
-      // Log deserialization attempt
       console.log('Deserializing user:', { userId: id });
       
-      const user = await db.oneOrNone('SELECT * FROM users WHERE id = $1', [id]);
+      const result = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
+      const user = result.rows[0];
       if (!user) {
         console.warn('User not found during deserialization', { userId: id });
         return done(null, false);
       }
 
-      // Log successful deserialization
       console.log('Successfully deserialized user:', { userId: id });
       done(null, user);
     } catch (err) {
@@ -84,7 +88,7 @@ export function createApp(db: any) {
   passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID || 'test-client-id',
     clientSecret: process.env.GOOGLE_CLIENT_SECRET || 'test-client-secret',
-    callbackURL: '/auth/google/callback'
+    callbackURL: '/api/auth/google/callback'
   }, async (accessToken, refreshToken, profile, done) => {
     try {
       if (!profile || !profile.id) {
@@ -92,7 +96,8 @@ export function createApp(db: any) {
         return done(null, false, { message: 'Invalid profile data' });
       }
 
-      const user = await db.oneOrNone('SELECT * FROM users WHERE google_id = $1', [profile.id]);
+      const result = await pool.query('SELECT * FROM users WHERE google_id = $1', [profile.id]);
+      const user = result.rows[0];
       if (user) {
         return done(null, user);
       }
@@ -111,26 +116,61 @@ export function createApp(db: any) {
   }));
 
   // Auth routes
-  app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
+  app.get('/api/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
   
-  app.get('/auth/google/callback', 
+  app.get('/api/auth/google/callback', 
     (async (req: Request, res: Response, next: NextFunction) => {
       // In test environment, simulate successful authentication
       if (process.env.NODE_ENV === 'test' && req.query.code === 'valid-code') {
-        const testUser = req.user;
-        if (!testUser) {
-          res.status(401).json({ error: 'No test user found' });
-          return;
-        }
-        
-        req.login(testUser, (err) => {
-          if (err) { 
-            next(err);
+        try {
+          // In test mode, we should already have a user from session initialization
+          const testUser = req.user;
+          if (!testUser) {
+            console.error('No test user found in session');
+            res.status(401).json({ error: 'No test user found' });
             return;
           }
+
+          // Ensure session exists
+          if (!req.session) {
+            console.error('Session not initialized');
+            res.status(500).json({ error: 'Session not initialized' });
+            return;
+          }
+
+          // Log in the user and wait for session to be saved
+          await new Promise<void>((resolve, reject) => {
+            req.login(testUser, (err) => {
+              if (err) {
+                console.error('Failed to log in user:', err);
+                reject(err);
+                return;
+              }
+              req.session.save((err) => {
+                if (err) {
+                  console.error('Failed to save session:', err);
+                  reject(err);
+                } else {
+                  resolve();
+                }
+              });
+            });
+          });
+
+          console.log('Test user logged in:', {
+            sessionId: req.sessionID,
+            passport: req.session.passport,
+            user: req.user,
+            authenticated: req.isAuthenticated()
+          });
+
           res.redirect('/');
-        });
-        return;
+          return;
+        } catch (err) {
+          console.error('Error in test callback:', err);
+          next(err);
+          return;
+        }
       }
       next();
     }) as RequestHandler,
@@ -156,7 +196,8 @@ export function createApp(db: any) {
 
     try {
       // Get the user from the database
-      const user = await db.oneOrNone('SELECT * FROM users WHERE id = $1', [passport.user]);
+      const result = await pool.query('SELECT * FROM users WHERE id = $1', [passport.user]);
+      const user = result.rows[0];
       
       if (!user) {
         console.warn('User not found during session initialization', { userId: passport.user });
@@ -164,27 +205,28 @@ export function createApp(db: any) {
         return;
       }
 
-      // Log the user in - this will set up the session
+      // Ensure session exists
+      if (!req.session) {
+        res.status(500).json({ error: 'Session not initialized' });
+        return;
+      }
+
+      // Log the user in and wait for session to be saved
       await new Promise<void>((resolve, reject) => {
         req.login(user, (err) => {
           if (err) {
             console.error('Failed to log in user:', err);
             reject(err);
-          } else {
-            resolve();
+            return;
           }
-        });
-      });
-
-      // Save session
-      await new Promise<void>((resolve, reject) => {
-        req.session.save((err) => {
-          if (err) {
-            console.error('Failed to save session:', err);
-            reject(err);
-          } else {
-            resolve();
-          }
+          req.session.save((err) => {
+            if (err) {
+              console.error('Failed to save session:', err);
+              reject(err);
+            } else {
+              resolve();
+            }
+          });
         });
       });
 
@@ -211,6 +253,15 @@ export function createApp(db: any) {
 
   // Session verification endpoint
   app.get('/api/auth/verify', ((req: Request, res: Response) => {
+    // Log session state for debugging
+    console.log('Session verification request:', {
+      sessionId: req.sessionID,
+      hasSession: !!req.session,
+      hasPassport: !!req.session?.passport,
+      isAuthenticated: req.isAuthenticated(),
+      user: req.user
+    });
+
     if (!req.isAuthenticated()) {
       res.status(401).json({
         authenticated: false,
@@ -242,4 +293,6 @@ export function createApp(db: any) {
   }) as RequestHandler);
 
   return app;
-} 
+}
+
+export { app }; 

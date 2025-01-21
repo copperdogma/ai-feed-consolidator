@@ -1,14 +1,15 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { db, cleanDatabase } from './setup';
+import { cleanupDatabase, createTestUser } from './setup';
+import { pool } from '../services/db';
 import { LoginHistoryService } from '../services/login-history';
 
 describe('Auth Error Handling', () => {
   beforeEach(async () => {
     // Clean database first
-    await cleanDatabase(db);
+    await cleanupDatabase();
     
     // Initialize login history service with db connection
-    LoginHistoryService.initialize(db);
+    LoginHistoryService.initialize(pool);
   });
 
   it('should handle failed login attempts without a valid user', async () => {
@@ -23,7 +24,8 @@ describe('Auth Error Handling', () => {
     });
 
     // Verify login history was recorded
-    const loginHistory = await db.manyOrNone('SELECT * FROM login_history');
+    const result = await pool.query('SELECT * FROM login_history');
+    const loginHistory = result.rows;
     expect(loginHistory).toHaveLength(1);
     expect(loginHistory[0].success).toBe(false);
     expect(loginHistory[0].ip_address).toBe('127.0.0.1');

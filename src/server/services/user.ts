@@ -1,63 +1,90 @@
 import { Profile } from 'passport-google-oauth20';
 import { pool, User, UserPreferences } from './db';
+import { PoolClient, QueryResult } from 'pg';
+import { withTransaction } from './db';
 
 interface CreateUserData {
   googleId: string;
   email: string;
   displayName: string;
-  avatarUrl: string | null;
+  avatarUrl?: string | null;
+}
+
+interface UserProfile {
+  user: User;
+  preferences: UserPreferences;
 }
 
 export class UserService {
-  static async findOrCreateUser(userData: CreateUserData): Promise<{ user: User; preferences: UserPreferences }> {
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
+  private static async createUserWithPreferences(
+    client: PoolClient,
+    userData: CreateUserData
+  ): Promise<{ user: User; preferences: UserPreferences }> {
+    // Create user
+    const userResult = await client.query<User>(
+      `INSERT INTO users (google_id, email, display_name, avatar_url)
+       VALUES ($1, $2, $3, $4)
+       RETURNING *`,
+      [userData.googleId, userData.email, userData.displayName, userData.avatarUrl || null]
+    );
 
-      // Try to find existing user
+    const user = userResult.rows[0];
+
+    // Create default preferences
+    const preferences = await client.query<UserPreferences>(
+      `INSERT INTO user_preferences (user_id, theme, email_notifications, content_language, summary_level)
+       VALUES ($1, 'light', true, 'en', 1)
+       RETURNING *`,
+      [user.id]
+    ).then(result => result.rows[0]);
+
+    return { user, preferences };
+  }
+
+  static async findOrCreateUser(userData: CreateUserData): Promise<{ user: User; preferences: UserPreferences }> {
+    return await withTransaction(async (client) => {
+      // First check if user exists without locking
       const existingUser = await client.query<User>(
         'SELECT * FROM users WHERE google_id = $1',
         [userData.googleId]
       ).then(result => result.rows[0]);
 
       if (existingUser) {
-        // Get existing preferences
+        // If user exists, get preferences
         const preferences = await client.query<UserPreferences>(
           'SELECT * FROM user_preferences WHERE user_id = $1',
           [existingUser.id]
         ).then(result => result.rows[0]);
 
-        await client.query('COMMIT');
         return { user: existingUser, preferences };
       }
 
-      // Create new user
-      const user = await client.query<User>(
-        `INSERT INTO users (google_id, email, display_name, avatar_url)
-         VALUES ($1, $2, $3, $4)
-         RETURNING *`,
-        [userData.googleId, userData.email, userData.displayName, userData.avatarUrl]
+      // If user doesn't exist, acquire locks in order (users first, then preferences)
+      await client.query('LOCK TABLE users IN SHARE MODE');
+      await client.query('LOCK TABLE user_preferences IN SHARE MODE');
+
+      // Double check user doesn't exist after acquiring lock
+      const doubleCheck = await client.query<User>(
+        'SELECT * FROM users WHERE google_id = $1 FOR UPDATE',
+        [userData.googleId]
       ).then(result => result.rows[0]);
 
-      // Create default preferences
-      const preferences = await client.query<UserPreferences>(
-        `INSERT INTO user_preferences (user_id, theme, email_notifications, content_language, summary_level)
-         VALUES ($1, 'light', true, 'en', 1)
-         RETURNING *`,
-        [user.id]
-      ).then(result => result.rows[0]);
+      if (doubleCheck) {
+        // Another transaction created the user while we were waiting for the lock
+        const preferences = await client.query<UserPreferences>(
+          'SELECT * FROM user_preferences WHERE user_id = $1',
+          [doubleCheck.id]
+        ).then(result => result.rows[0]);
 
-      await client.query('COMMIT');
-      return { user, preferences };
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
+        return { user: doubleCheck, preferences };
+      }
+
+      return await UserService.createUserWithPreferences(client, userData);
+    });
   }
 
   static async findUserByEmail(email: string): Promise<User | null> {
+    // No need for transaction or locks for a simple read
     const result = await pool.query<User>(
       'SELECT * FROM users WHERE email = $1',
       [email]
@@ -66,6 +93,7 @@ export class UserService {
   }
 
   static async findUserById(id: number): Promise<User | null> {
+    // No need for transaction or locks for a simple read
     const result = await pool.query<User>(
       'SELECT * FROM users WHERE id = $1',
       [id]
@@ -77,11 +105,8 @@ export class UserService {
     user: User;
     preferences: UserPreferences;
   }> {
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-
-      // Try to find existing user
+    return await withTransaction(async (client) => {
+      // First check if user exists without locking
       let user = await client.query<User>(
         'SELECT * FROM users WHERE google_id = $1',
         [profile.id]
@@ -89,7 +114,7 @@ export class UserService {
 
       if (!user) {
         // Create new user with preferences
-        const result = await UserService.findOrCreateUser({
+        const result = await UserService.createUserWithPreferences(client, {
           googleId: profile.id,
           email: profile.emails?.[0]?.value || '',
           displayName: profile.displayName,
@@ -97,7 +122,7 @@ export class UserService {
         });
         user = result.user;
       } else {
-        // Update existing user's info
+        // Update existing user's info if needed
         const updates: Partial<User> = {};
         
         if (profile.displayName !== user.display_name) {
@@ -128,7 +153,7 @@ export class UserService {
         }
       }
 
-      // Get user preferences
+      // Get preferences
       const preferencesResult = await client.query<UserPreferences>(
         'SELECT * FROM user_preferences WHERE user_id = $1',
         [user.id]
@@ -136,64 +161,95 @@ export class UserService {
       const preferences = preferencesResult.rows[0];
       
       if (!preferences) {
-        await client.query('ROLLBACK');
         throw new Error(`User preferences not found for user ${user.id}`);
       }
 
-      await client.query('COMMIT');
       return { user, preferences };
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
-  }
-
-  static async getUserProfile(userId: number): Promise<{
-    user: User;
-    preferences: UserPreferences;
-  } | null> {
-    const userResult = await pool.query<User>(
-      'SELECT * FROM users WHERE id = $1',
-      [userId]
-    );
-    const user = userResult.rows[0];
-    if (!user) return null;
-
-    const preferencesResult = await pool.query<UserPreferences>(
-      'SELECT * FROM user_preferences WHERE user_id = $1',
-      [userId]
-    );
-    const preferences = preferencesResult.rows[0];
-    if (!preferences) return null;
-
-    return { user, preferences };
-  }
-
-  static async updatePreferences(
-    userId: number,
-    updates: Partial<UserPreferences>
-  ): Promise<UserPreferences | null> {
-    // Convert camelCase keys to snake_case for database
-    const snakeCaseUpdates: Record<string, any> = {};
-    Object.entries(updates).forEach(([key, value]) => {
-      const snakeKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
-      snakeCaseUpdates[snakeKey] = value;
     });
+  }
 
-    const updateFields = Object.keys(snakeCaseUpdates).map((key, i) => `${key} = $${i + 1}`);
-    const updateValues = Object.values(snakeCaseUpdates);
-    updateValues.push(userId);
+  static async getUserProfile(userId: number): Promise<UserProfile | null> {
+    return await withTransaction(async (client) => {
+      // Get user without lock since we're just reading
+      const userResult = await client.query<User>(
+        'SELECT * FROM users WHERE id = $1',
+        [userId]
+      );
 
-    const result = await pool.query<UserPreferences>(
-      `UPDATE user_preferences 
-       SET ${updateFields.join(', ')}, updated_at = NOW()
-       WHERE user_id = $${updateValues.length}
-       RETURNING *`,
-      updateValues
-    );
+      if (userResult.rows.length === 0) {
+        return null;
+      }
 
-    return result.rows[0] || null;
+      const user = userResult.rows[0];
+
+      // Get preferences
+      const prefsResult = await client.query<UserPreferences>(
+        'SELECT * FROM user_preferences WHERE user_id = $1',
+        [userId]
+      );
+
+      if (prefsResult.rows.length === 0) {
+        return null;
+      }
+
+      return {
+        user,
+        preferences: prefsResult.rows[0]
+      };
+    });
+  }
+
+  static async updatePreferences(userId: number, updates: Partial<UserPreferences>): Promise<UserPreferences | null> {
+    return await withTransaction(async (client) => {
+      // First check if user exists without lock
+      const userResult = await client.query<User>(
+        'SELECT * FROM users WHERE id = $1',
+        [userId]
+      );
+
+      if (userResult.rows.length === 0) {
+        return null;
+      }
+
+      // Get current preferences with lock
+      const prefsResult = await client.query<UserPreferences>(
+        'SELECT * FROM user_preferences WHERE user_id = $1 FOR UPDATE',
+        [userId]
+      );
+
+      if (prefsResult.rows.length === 0) {
+        // Create preferences with provided updates and defaults for missing fields
+        const defaultPrefs = {
+          theme: 'light',
+          email_notifications: true,
+          content_language: 'en',
+          summary_level: 1,
+          ...updates
+        };
+
+        const result = await client.query<UserPreferences>(
+          `INSERT INTO user_preferences (user_id, theme, email_notifications, content_language, summary_level)
+           VALUES ($1, $2, $3, $4, $5)
+           RETURNING *`,
+          [userId, defaultPrefs.theme, defaultPrefs.email_notifications, defaultPrefs.content_language, defaultPrefs.summary_level]
+        );
+        return result.rows[0];
+      }
+
+      // Update preferences
+      const updateFields = Object.keys(updates).map((key, i) => `${key} = $${i + 2}`);
+      const updateValues = Object.values(updates);
+      updateValues.unshift(userId); // Add userId as first parameter
+
+      const result = await client.query<UserPreferences>(
+        `UPDATE user_preferences 
+         SET ${updateFields.join(', ')}, updated_at = NOW()
+         WHERE user_id = $1
+         RETURNING *`,
+        updateValues
+      );
+
+      return result.rows[0];
+    });
   }
 } 

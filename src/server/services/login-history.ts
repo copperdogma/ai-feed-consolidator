@@ -1,6 +1,5 @@
-import { IDatabase } from 'pg-promise';
+import { Pool, PoolClient, QueryResult } from 'pg';
 import { withTransaction } from './db';
-import type { PoolClient } from 'pg';
 
 export interface LoginAttempt {
   userId: number | null;  // Allow null for failed attempts
@@ -9,64 +8,69 @@ export interface LoginAttempt {
   userAgent: string;
   loginTime: Date;
   failureReason?: string;
+  requestPath?: string;
 }
 
-export interface LoginHistoryEntry extends LoginAttempt {
+export interface LoginHistoryEntry {
   id: number;
+  userId: number | null;
+  success: boolean;
+  ipAddress: string;
+  userAgent: string;
+  loginTime: Date;
+  failureReason?: string;
+  requestPath?: string;
 }
 
 export class LoginHistoryService {
-  private static db: IDatabase<any>;
+  private static pool: Pool;
 
-  static initialize(database: IDatabase<any>) {
-    this.db = database;
-  }
-
-  private static async verifyUser(userId: number | null): Promise<boolean> {
-    if (!this.db) {
-      throw new Error('Database not initialized');
-    }
-
-    // Skip verification for null userId (failed attempts)
-    if (userId === null) {
-      return true;
-    }
-
-    try {
-      const result = await this.db.oneOrNone('SELECT id FROM users WHERE id = $1', [userId]);
-      return !!result;
-    } catch (error) {
-      console.error('Error verifying user:', error);
-      return false;
-    }
+  static initialize(pool: Pool) {
+    this.pool = pool;
   }
 
   static async recordLoginAttempt(attempt: LoginAttempt): Promise<void> {
-    if (!this.db) {
+    if (!this.pool) {
       throw new Error('Database not initialized');
-    }
-
-    // Verify user exists before starting transaction (skip for null userId)
-    if (attempt.userId !== null) {
-      const userExists = await this.verifyUser(attempt.userId);
-      if (!userExists) {
-        throw new Error(`User with ID ${attempt.userId} not found`);
-      }
     }
 
     try {
       await withTransaction(async (client: PoolClient) => {
+        await client.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
+
+        // For failed attempts, we don't need a user ID
+        if (!attempt.success) {
+          attempt.userId = null;
+        }
+
+        // Only verify user existence for successful logins with a user ID
+        if (attempt.success && attempt.userId !== null) {
+          const userExists = await client.query(
+            'SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)',
+            [attempt.userId]
+          );
+
+          if (!userExists.rows[0].exists) {
+            throw new Error(`User with ID ${attempt.userId} not found`);
+          }
+        }
+
+        // Ensure loginTime is a valid Date
+        const loginTime = attempt.loginTime instanceof Date ? attempt.loginTime : new Date(attempt.loginTime);
+
+        // Record the login attempt
         await client.query(`
           INSERT INTO login_history (
-            user_id, success, ip_address, user_agent, login_time, failure_reason
-          ) VALUES ($1, $2, $3, $4, $5, $6)
+            user_id, success, ip_address, user_agent, login_time, failure_reason, request_path
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7)
         `, [
           attempt.userId,
           attempt.success,
           attempt.ipAddress,
           attempt.userAgent,
-          attempt.loginTime,
-          attempt.failureReason || null
+          loginTime.toISOString(),
+          attempt.failureReason || null,
+          attempt.requestPath
         ]);
       });
     } catch (error) {
@@ -76,17 +80,37 @@ export class LoginHistoryService {
   }
 
   static async getLoginHistory(userId: number, limit: number = 10): Promise<LoginHistoryEntry[]> {
-    if (!this.db) {
+    if (!this.pool) {
       throw new Error('Database not initialized');
     }
 
     try {
-      return await this.db.manyOrNone<LoginHistoryEntry>(`
-        SELECT * FROM login_history
-        WHERE user_id = $1
-        ORDER BY login_time DESC
-        LIMIT $2
-      `, [userId, limit]);
+      return await withTransaction(async (client: PoolClient) => {
+        await client.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
+
+        // Get login history for both successful and failed attempts
+        const result = await client.query<Omit<LoginHistoryEntry, 'loginTime'> & { loginTime: string }>(`
+          SELECT 
+            id,
+            user_id as "userId",
+            success,
+            ip_address as "ipAddress",
+            user_agent as "userAgent",
+            login_time as "loginTime",
+            failure_reason as "failureReason",
+            request_path as "requestPath"
+          FROM login_history
+          WHERE user_id = $1 OR (user_id IS NULL AND success = false)
+          ORDER BY login_time DESC
+          LIMIT $2
+        `, [userId, limit]);
+
+        // Convert login_time strings to Date objects
+        return result.rows.map(row => ({
+          ...row,
+          loginTime: new Date(row.loginTime)
+        }));
+      });
     } catch (error) {
       console.error('Error getting login history:', error);
       throw error;
@@ -94,21 +118,42 @@ export class LoginHistoryService {
   }
 
   static async getRecentFailedAttempts(userId: number, timeWindow: number = 30): Promise<number> {
-    if (!this.db) {
+    if (!this.pool) {
       throw new Error('Database not initialized');
     }
 
     try {
-      const result = await this.db.one(`
-        SELECT COUNT(*) as count
-        FROM login_history
-        WHERE user_id = $1
-          AND success = false
-          AND login_time > NOW() - INTERVAL '${timeWindow} minutes'
-      `, [userId]);
-      return parseInt(result.count);
+      return await withTransaction(async (client: PoolClient) => {
+        await client.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
+
+        // First verify that the user exists
+        const userExists = await client.query(
+          'SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)',
+          [userId]
+        );
+
+        if (!userExists.rows[0].exists) {
+          throw new Error(`User with ID ${userId} not found`);
+        }
+
+        // Get failed attempts count for both user-specific and anonymous attempts
+        const result = await client.query<{ count: string }>(`
+          SELECT COUNT(*) as count
+          FROM login_history
+          WHERE success = false
+            AND (
+              -- Include failed attempts for this specific user
+              (user_id = $1 AND success = false)
+              -- Include anonymous failed attempts
+              OR (user_id IS NULL AND success = false)
+            )
+            AND login_time > NOW() - INTERVAL '${timeWindow} minutes'
+        `, [userId]);
+
+        return parseInt(result.rows[0].count, 10);
+      });
     } catch (error) {
-      console.error('Error getting recent failed attempts:', error);
+      console.error('Error counting recent failed attempts:', error);
       throw error;
     }
   }
