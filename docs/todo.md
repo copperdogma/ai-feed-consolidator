@@ -53,10 +53,18 @@
 
 ### Infrastructure
 - Development Environment
-  - [ ] Configure MUI and React Query
-  - [ ] Set up basic web UI scaffold
-  - [ ] Create responsive layout
-  - [ ] Implement basic navigation
+  - [x] Install MUI and React Query dependencies
+  - [x] Configure MUI:
+    - [x] Set up ThemeProvider
+    - [x] Configure default theme and styles
+    - [x] Create base component templates
+    - [x] Fix layout and centering issues
+  - [ ] Configure React Query:
+    - [ ] Set up QueryClient and Provider
+    - [ ] Configure default options (caching, retries)
+    - [ ] Migrate existing data fetching to React Query hooks
+  - [x] Create responsive layout
+  - [x] Implement basic navigation
 
 - Deployment
   - [ ] Configure fly.io deployment
