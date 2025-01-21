@@ -1,11 +1,18 @@
-import { useEffect, useState } from 'react';
+/** @jsxImportSource react */
+import React, { useEffect, useState } from 'react';
 import './App.css';
 
 interface User {
-  id?: string;
-  displayName?: string;
-  emails?: { value: string }[];
-  photos?: { value: string }[];
+  id: number;
+  google_id: string;
+  email: string;
+  display_name: string | null;
+  avatar_url: string | null;
+}
+
+interface AuthResponse {
+  authenticated: boolean;
+  user: User;
 }
 
 function App() {
@@ -13,14 +20,14 @@ function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('http://localhost:3003/api/user', {
+    fetch('http://localhost:3003/api/auth/verify', {
       credentials: 'include'
     })
       .then(res => {
-        if (res.ok) return res.json();
+        if (res.ok) return res.json() as Promise<AuthResponse>;
         throw new Error('Not authenticated');
       })
-      .then(userData => setUser(userData))
+      .then(data => setUser(data.user))
       .catch(() => setUser(null))
       .finally(() => setLoading(false));
   }, []);
@@ -43,11 +50,11 @@ function App() {
 
   return (
     <div className="container">
-      <h1>Welcome, {user.displayName}!</h1>
-      {user.photos?.[0]?.value && (
-        <img src={user.photos[0].value} alt="Profile" className="profile-image" />
+      <h1>Welcome, {user.display_name || 'User'}!</h1>
+      {user.avatar_url && (
+        <img src={user.avatar_url} alt="Profile" className="profile-image" />
       )}
-      <p>Email: {user.emails?.[0]?.value}</p>
+      <p>Email: {user.email}</p>
       <a href="/auth/logout" className="logout-button">
         Logout
       </a>

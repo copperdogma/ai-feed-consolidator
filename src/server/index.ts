@@ -90,6 +90,21 @@ const userHandler: RequestHandler = (req, res) => {
 
 app.get('/api/user', requireAuth, userHandler);
 
+// Session verification endpoint
+app.get('/api/auth/verify', (req, res) => {
+  if (req.isAuthenticated()) {
+    res.json({
+      authenticated: true,
+      user: req.user
+    });
+  } else {
+    res.status(401).json({
+      authenticated: false,
+      user: null
+    });
+  }
+});
+
 // Error handling middleware
 app.use((err: Error, req: Request, res: Response, next: Function) => {
   logger.error({ err, req: { method: req.method, url: req.url } }, 'Unhandled error');
