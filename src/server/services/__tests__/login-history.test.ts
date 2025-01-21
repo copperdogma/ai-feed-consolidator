@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { LoginHistoryService } from '../login-history';
 import { cleanDatabase, createTestUser, db } from '../../__tests__/setup';
 
@@ -6,15 +6,21 @@ describe('LoginHistoryService', () => {
   let testUser: { id: number };
 
   beforeEach(async () => {
-    await cleanDatabase();
+    // Initialize service first
+    LoginHistoryService.initialize(db);
+    
+    // Clean database and create test user
+    await cleanDatabase(db);
     testUser = await createTestUser();
     
     // Verify the user was created successfully
     const verifyUser = await db.one('SELECT * FROM users WHERE id = $1', [testUser.id]);
     expect(verifyUser).toBeTruthy();
     expect(verifyUser.id).toBe(testUser.id);
-    
-    LoginHistoryService.initialize(db);
+  });
+
+  afterEach(async () => {
+    await cleanDatabase(db);
   });
 
   it('should record login attempts', async () => {

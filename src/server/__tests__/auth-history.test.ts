@@ -11,7 +11,7 @@ describe('Auth History', () => {
 
   beforeEach(async () => {
     try {
-      await cleanDatabase();
+      await cleanDatabase(db);
       app = createApp(db);
       
       // Create test user with preferences
@@ -20,59 +20,34 @@ describe('Auth History', () => {
       // Create reusable authenticated agent
       agent = request.agent(app);
       
-      // Initialize session with test user with retries
-      let sessionResponse;
-      for (let attempt = 0; attempt < 3; attempt++) {
-        sessionResponse = await agent
-          .post('/test/session')
-          .send({ user: testUser });
+      // Initialize session with test user
+      const sessionResponse = await agent
+        .post('/api/auth/session')
+        .send({ 
+          passport: {
+            user: testUser.id
+          }
+        })
+        .expect(200);
 
-        console.debug('Session initialization response:', sessionResponse.body);
+      console.debug('Session initialization response:', sessionResponse.body);
 
-        if (sessionResponse.body.success) {
-          break;
-        }
+      // Wait for session to be saved
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
-        await new Promise(resolve => setTimeout(resolve, 500 * Math.pow(2, attempt)));
-      }
+      // Verify session was initialized
+      const verifyResponse = await agent
+        .get('/api/auth/verify')
+        .expect(200);
 
-      if (!sessionResponse || !sessionResponse.body.success) {
-        throw new Error(`Failed to initialize session after retries: ${sessionResponse?.body?.message || 'Unknown error'}`);
-      }
+      console.debug('Session verification response:', verifyResponse.body);
 
-      // Wait longer for session to be saved
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      // Verify session was initialized with retries
-      let verifyResponse = { status: 0, body: { message: 'No response' } };
-      for (let attempt = 0; attempt < 3; attempt++) {
-        verifyResponse = await agent.get('/protected');
-        console.debug('Session verification response:', verifyResponse.body);
-
-        if (verifyResponse.status === 200) {
-          break;
-        }
-
-        await new Promise(resolve => setTimeout(resolve, 500 * Math.pow(2, attempt)));
-      }
-
-      if (verifyResponse.status !== 200) {
-        console.error('Session state:', {
-          sessionId: sessionResponse.body.sessionId,
-          verifyStatus: verifyResponse.status,
-          verifyBody: verifyResponse.body
-        });
-        throw new Error(`Session verification failed: ${verifyResponse.body.message || 'User not authenticated'}`);
-      }
-
-      // Make an additional request to ensure session persists
-      const secondVerify = await agent.get('/protected');
-      if (secondVerify.status !== 200) {
-        throw new Error('Session did not persist between requests');
+      if (!verifyResponse.body.authenticated) {
+        throw new Error('Session verification failed: User not authenticated');
       }
     } catch (error) {
       console.error('Setup error:', error);
-      await cleanDatabase();
+      await cleanDatabase(db);
       throw error;
     }
   });

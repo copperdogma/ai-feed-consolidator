@@ -1,13 +1,16 @@
-import { beforeAll, afterAll } from 'vitest';
+import { beforeAll, afterAll, expect } from 'vitest';
 import { config } from 'dotenv';
 import pgPromise from 'pg-promise';
-import type { IDatabase, IMain } from 'pg-promise';
-import type { IClient } from 'pg-promise/typescript/pg-subset';
+import type { IDatabase, IMain, ITask } from 'pg-promise';
 import { Request } from 'express';
 import { User } from '../services/db';
 import supertest from 'supertest';
 import { SuperAgentTest } from 'supertest';
 import express from 'express';
+import { createApp } from '../app';
+import { promises as fs } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 
 // Load environment variables
 config({ path: '.env.test' });
@@ -17,304 +20,242 @@ process.env.NODE_ENV = process.env.NODE_ENV || 'test';
 process.env.GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || 'test-client-id';
 process.env.GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || 'test-client-secret';
 
-// Initialize pg-promise with minimal options
-const pgp = pgPromise({
-  error(err, e) {
-    if (e.cn) {
-      console.error('Connection error:', err);
-    } else if (e.query) {
-      console.error('Query error:', err);
-    } else {
-      console.error('Generic error:', err);
-    }
+// Get current file's directory with ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Initialize pg-promise with custom settings
+const pgp: IMain = pgPromise({
+  query(e) {
+    console.log('QUERY:', e.query);
   }
 });
 
-// Create a connection pool with proper settings
-export const db = pgp({
-  connectionString: process.env.DATABASE_URL,
-  max: 10, // maximum number of clients in the pool
-  idleTimeoutMillis: 1000, // how long a client is allowed to remain idle before being closed
-  connectionTimeoutMillis: 2000, // how long to wait for a connection
+// Create db instance
+export const db: IDatabase<any> = pgp(process.env.DATABASE_URL || '');
+
+// Run migrations before any tests
+beforeAll(async () => {
+  await resetDatabase(db);
 });
 
 // Constants for cleanup and retries
-const CLEANUP_TIMEOUT = 60000; // 60 seconds
-const LOCK_TIMEOUT = 30000; // 30 seconds
-const MAX_RETRIES = 10; // Increased from 5
-const RETRY_DELAY_BASE = 200; // Base delay in milliseconds
-const DEADLOCK_ERROR_CODE = '40P01';
-const STATEMENT_TIMEOUT_ERROR_CODE = '57014';
-const TRANSACTION_ABORTED_ERROR_CODE = '25P02';
-const CLEANUP_LOCK_ID = 1000; // Advisory lock ID for cleanup
+const BASE_CLEANUP_LOCK_ID = 41200;
+const CLEANUP_TIMEOUT = 120000; // 120 seconds
+const LOCK_TIMEOUT = 60000; // 60 seconds
+const MAX_RETRIES = 3;
+const RETRY_DELAY_BASE = 1000; // 1 second
 
-// Helper function to wait with exponential backoff
-async function wait(attempt: number) {
-  const delay = Math.min(RETRY_DELAY_BASE * Math.pow(2, attempt - 1), 5000);
+// Tables in dependency order (children first)
+const TABLES_IN_ORDER = [
+  'login_history',     // No dependencies
+  'user_preferences',  // Depends on users
+  'sessions',         // Depends on users
+  'users'            // Parent table
+];
+
+// Helper function to wait with exponential backoff and jitter
+async function wait(attempt: number): Promise<void> {
+  const jitter = Math.random() * RETRY_DELAY_BASE;
+  const delay = Math.pow(2, attempt - 1) * RETRY_DELAY_BASE + jitter;
   await new Promise(resolve => setTimeout(resolve, delay));
 }
 
-// Helper function to truncate a single table with retries
-async function truncateTable(client: pgPromise.IBaseProtocol<{}>, table: string, attempt: number = 0): Promise<void> {
-  try {
-    // Start a new transaction for this table
-    await client.none('BEGIN');
-    
-    // Disable triggers temporarily for this transaction
-    await client.none('SET LOCAL session_replication_role = replica');
-    
-    // Attempt to truncate the table
-    await client.none('TRUNCATE TABLE $1:name CASCADE', [table]);
-    
-    // Re-enable triggers
-    await client.none('SET LOCAL session_replication_role = origin');
-    
-    // Commit the transaction
-    await client.none('COMMIT');
-    console.log(`Successfully cleaned table: ${table}`);
-    
-  } catch (error: any) {
-    console.error(`Error cleaning table ${table}:`, error);
-    
-    try {
-      await client.none('ROLLBACK');
-    } catch (rollbackError) {
-      console.error(`Error rolling back ${table} cleanup:`, rollbackError);
-    }
-
-    if ((error.code === DEADLOCK_ERROR_CODE || 
-         error.code === STATEMENT_TIMEOUT_ERROR_CODE ||
-         error.code === TRANSACTION_ABORTED_ERROR_CODE) && 
-        attempt < MAX_RETRIES - 1) {
-      console.log(`Retrying table ${table}, attempt ${attempt + 1}/${MAX_RETRIES}`);
-      await wait(attempt);
-      return truncateTable(client, table, attempt + 1);
-    }
-    throw error;
-  }
-}
-
-// Helper function to create a test user with preferences in a single query
+// Create a test user for use in tests
 export async function createTestUser(): Promise<User> {
-  try {
-    const uniqueId = `test-google-id-${Date.now()}-${Math.random().toString(36).substring(2)}`;
-    return await db.tx(async t => {
-      // Create user and preferences in a single transaction
-      const result = await t.one(`
-        WITH new_user AS (
-          INSERT INTO users (email, google_id, display_name, avatar_url)
-          VALUES ($1, $2, $3, $4)
-          RETURNING id, email, google_id, display_name, avatar_url
-        )
-        INSERT INTO user_preferences (user_id, theme, email_notifications, content_language, summary_level)
-        SELECT id, 'light', true, 'en', 1 FROM new_user
-        RETURNING (SELECT row_to_json(new_user) FROM new_user)
-      `, [`test-${uniqueId}@example.com`, uniqueId, 'Test User', 'https://example.com/avatar.jpg']);
-      
-      return result.row_to_json;
-    });
-  } catch (error) {
-    console.error('Error creating test user:', error);
-    throw error;
-  }
+  return db.tx<User>(async (t: ITask<User>) => {
+    // Create the user first
+    const testUser = await t.one<User>(`
+      INSERT INTO users (google_id, email, display_name, avatar_url)
+      VALUES ($1, $2, $3, $4)
+      RETURNING *
+    `, ['test-google-id', 'test@example.com', 'Test User', 'https://example.com/picture.jpg']);
+
+    // Then create their preferences
+    await t.none(`
+      INSERT INTO user_preferences (user_id, theme, email_notifications, content_language, summary_level)
+      VALUES ($1, $2, $3, $4, $5)
+    `, [testUser.id, 'light', true, 'en', 1]);
+
+    return testUser;
+  });
 }
 
-// Helper function to initialize a test session
-export async function initializeTestSession(app: express.Express, user: User): Promise<ReturnType<typeof supertest.agent>> {
+// Create an authenticated agent for testing protected routes
+export async function createAuthenticatedAgent(): Promise<ReturnType<typeof supertest.agent>> {
+  const app = createApp(db);
   const agent = supertest.agent(app);
+  const testUser = await createTestUser();
 
-  // Initialize session with retries
-  let response;
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    try {
-      response = await agent
-        .post('/test/session')
-        .send({ user })
-        .expect(200);
-
-      if (response.body.success) {
-        break;
-      }
-
-      console.warn(`Session initialization attempt ${attempt + 1} failed:`, response.body);
-      await wait(attempt);
-    } catch (error) {
-      console.error(`Session initialization attempt ${attempt + 1} error:`, error);
-      if (attempt === MAX_RETRIES - 1) throw error;
-      await wait(attempt);
+  // Mock the session data
+  const mockSession = {
+    passport: {
+      user: testUser.id
     }
-  }
+  };
 
-  if (!response?.body.success) {
-    throw new Error('Session initialization failed after retries');
-  }
-
-  // Wait for session to be saved
-  await new Promise(resolve => setTimeout(resolve, 250));
-
-  // Verify session is initialized with retries
-  let verifyResponse;
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    try {
-      verifyResponse = await agent.get('/protected').expect(200);
-      break;
-    } catch (error) {
-      console.error(`Session verification attempt ${attempt + 1} error:`, error);
-      if (attempt === MAX_RETRIES - 1) throw error;
-      await wait(attempt);
-    }
-  }
-
-  if (!verifyResponse) {
-    throw new Error('Session verification failed after retries');
-  }
-
-  // Log final session state for debugging
-  console.debug('Session initialized successfully:', {
-    sessionId: response.body.sessionId,
-    verifyStatus: verifyResponse.status,
-    verifyBody: verifyResponse.body
-  });
+  // Set up the agent with the session
+  await agent
+    .post('/api/auth/session')
+    .send(mockSession)
+    .expect(200);
 
   return agent;
 }
 
-// Clean database after each test
-export async function cleanDatabase(): Promise<void> {
-  let client: pgPromise.IConnected<{}, any> | null = null;
-  let lockAcquired = false;
+function getCleanupLockId(testFilePath: string): number {
+  // Use a hash of the test file path to generate a unique lock ID
+  const hash = testFilePath.split('').reduce((acc, char) => {
+    return ((acc << 5) - acc) + char.charCodeAt(0);
+  }, 0);
+  return BASE_CLEANUP_LOCK_ID + (Math.abs(hash) % 1000);
+}
+
+async function acquireCleanupLock(db: IDatabase<any>, testFilePath: string): Promise<boolean> {
+  const lockId = getCleanupLockId(testFilePath);
+  return db.one('SELECT pg_try_advisory_lock($1) as acquired', [lockId])
+    .then(result => result.acquired);
+}
+
+async function releaseCleanupLock(db: IDatabase<any>, testFilePath: string): Promise<void> {
+  const lockId = getCleanupLockId(testFilePath);
+  // pg_advisory_unlock returns a boolean indicating success
+  await db.one('SELECT pg_advisory_unlock($1) as unlocked', [lockId], r => r.unlocked);
+}
+
+// Clean the database before tests
+export async function cleanDatabase(db: IDatabase<any>, testFilePath?: string): Promise<void> {
+  const filePath = testFilePath || getTestFilePath();
+  const lockId = getCleanupLockId(filePath);
+
+  // First try to acquire the cleanup lock
+  const lockAcquired = await db.one('SELECT pg_try_advisory_lock($1) as acquired', [lockId], r => r.acquired);
+  if (!lockAcquired) {
+    throw new Error('Could not acquire cleanup lock');
+  }
 
   try {
-    client = await db.connect();
-    
-    // Try to acquire cleanup lock with retries and longer timeout
-    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-      try {
-        await client.none('SET LOCAL lock_timeout = $1', [LOCK_TIMEOUT * 2]); // Double the lock timeout
-        const result = await client.one('SELECT pg_try_advisory_lock($1) as acquired', [CLEANUP_LOCK_ID]);
-        if (result.acquired) {
-          console.log('Acquired cleanup lock');
-          lockAcquired = true;
-          break;
-        }
-        console.log(`Cleanup lock not acquired, attempt ${attempt}/${MAX_RETRIES}`);
-        if (attempt < MAX_RETRIES) {
-          await wait(attempt);
-        }
-      } catch (error) {
-        console.error('Error acquiring cleanup lock:', error);
-        if (attempt < MAX_RETRIES) {
-          await wait(attempt);
-        }
-      }
-    }
-
-    if (!lockAcquired) {
-      throw new Error(`Failed to acquire cleanup lock after ${MAX_RETRIES} attempts`);
-    }
-
-    // Start transaction and set statement timeout
-    await client.none('BEGIN');
-    await client.none('SET LOCAL statement_timeout = $1', [CLEANUP_TIMEOUT]);
-    await client.none('SET LOCAL lock_timeout = $1', [LOCK_TIMEOUT]);
-    await client.none('SET LOCAL session_replication_role = replica'); // Disable triggers temporarily
-
-    // Truncate tables in order with individual transactions
-    const tables = ['login_history', 'user_preferences', 'sessions', 'users'];
-    for (const table of tables) {
-      let tableCleanupAttempt = 0;
-      let success = false;
+    await db.tx(async t => {
+      // Set aggressive statement timeout
+      await t.none('SET statement_timeout = 5000');
       
-      while (tableCleanupAttempt < MAX_RETRIES && !success) {
+      // Temporarily disable triggers and foreign key checks
+      await t.none('SET session_replication_role = replica');
+
+      // Log start of cleanup
+      console.log('Starting database cleanup...');
+
+      // Truncate tables in order (children first)
+      for (const table of TABLES_IN_ORDER) {
         try {
-          // Start a new transaction for each table
-          await client.none('SAVEPOINT table_cleanup');
-          
-          // Try to truncate the table
-          await client.none(`TRUNCATE TABLE "${table}" CASCADE`);
-          console.log(`Successfully cleaned table: ${table}`);
-          
-          // Release the savepoint
-          await client.none('RELEASE SAVEPOINT table_cleanup');
-          success = true;
-          
+          await t.none(`TRUNCATE TABLE "${table}" CASCADE`);
+          console.log(`Cleaned table: ${table}`);
         } catch (error: any) {
-          console.error(`Error cleaning table ${table}:`, error);
-          
-          // Rollback to the savepoint
-          try {
-            await client.none('ROLLBACK TO SAVEPOINT table_cleanup');
-          } catch (rollbackError) {
-            console.error(`Error rolling back to savepoint:`, rollbackError);
-          }
-          
-          if ((error.code === DEADLOCK_ERROR_CODE || 
-               error.code === STATEMENT_TIMEOUT_ERROR_CODE || 
-               error.code === TRANSACTION_ABORTED_ERROR_CODE) && 
-              tableCleanupAttempt < MAX_RETRIES - 1) {
-            tableCleanupAttempt++;
-            await wait(tableCleanupAttempt);
+          if (error?.code === '42P01') { // Table doesn't exist
+            console.log(`Table ${table} does not exist, skipping`);
             continue;
           }
-          
           throw error;
         }
       }
-      
-      // Add a small delay between tables to reduce contention
-      await new Promise(resolve => setTimeout(resolve, 200));
-    }
 
-    await client.none('SET LOCAL session_replication_role = origin'); // Re-enable triggers
-    await client.none('COMMIT');
-    console.log('Database cleanup successful');
-
-  } catch (error) {
-    console.error('Error during database cleanup:', error);
-    if (client) {
-      try {
-        await client.none('ROLLBACK');
-      } catch (rollbackError) {
-        console.error('Error during rollback:', rollbackError);
-      }
-    }
-    throw error;
+      // Re-enable triggers and foreign key checks
+      await t.none('SET session_replication_role = default');
+      console.log('Database cleanup completed');
+    });
   } finally {
-    if (lockAcquired && client) {
-      try {
-        await client.one('SELECT pg_advisory_unlock($1) as unlocked', [CLEANUP_LOCK_ID]);
-        console.log('Released cleanup lock');
-      } catch (unlockError) {
-        console.error('Error releasing cleanup lock:', unlockError);
-      }
-    }
-    if (client) {
-      try {
-        await client.done();
-      } catch (releaseError) {
-        console.error('Error releasing client:', releaseError);
-      }
-    }
+    // Always release the lock
+    await releaseCleanupLock(db, filePath);
   }
 }
 
-// Clean database before all tests
-beforeAll(async () => {
-  try {
-    await cleanDatabase();
-  } catch (error) {
-    console.error('Error in beforeAll cleanup:', error);
-    throw error;
-  }
-});
+// Add after cleanDatabase function
+export async function resetDatabase(db: IDatabase<any>, testFilePath?: string): Promise<void> {
+  const filePath = testFilePath || getTestFilePath();
+  const lockId = getCleanupLockId(filePath);
 
-// Clean database after all tests
-afterAll(async () => {
+  // First try to acquire the cleanup lock
+  const lockAcquired = await db.one('SELECT pg_try_advisory_lock($1) as acquired', [lockId], r => r.acquired);
+  if (!lockAcquired) {
+    throw new Error('Could not acquire cleanup lock');
+  }
+
   try {
-    await cleanDatabase();
-    await db.$pool.end(); // Close all connections in the pool
+    // Drop all tables
+    await db.none(`
+      DO $$ DECLARE
+        r RECORD;
+      BEGIN
+        FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = current_schema()) LOOP
+          EXECUTE 'DROP TABLE IF EXISTS ' || quote_ident(r.tablename) || ' CASCADE';
+        END LOOP;
+      END $$;
+    `);
+
+    // Run all migrations
+    await runMigrations(db);
+  } finally {
+    // Always release the lock
+    await releaseCleanupLock(db, filePath);
+  }
+}
+
+// Extract migration running logic to its own function
+async function runMigrations(db: IDatabase<any>): Promise<void> {
+  try {
+    // Create migrations table if it doesn't exist
+    await db.none(`
+      CREATE TABLE IF NOT EXISTS migrations (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL UNIQUE,
+        executed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Get list of migration files
+    const migrationsDir = join(__dirname, '../../../migrations');
+    const files = await fs.readdir(migrationsDir);
+    const sqlFiles = files.filter(f => f.endsWith('.sql')).sort();
+
+    // Get executed migrations
+    const executedMigrations = await db.map(
+      'SELECT name FROM migrations',
+      [],
+      (row: { name: string }) => row.name
+    );
+    const executedNames = new Set(executedMigrations);
+
+    // Run pending migrations
+    for (const file of sqlFiles) {
+      if (!executedNames.has(file)) {
+        console.log(`Running migration: ${file}`);
+        const filePath = join(migrationsDir, file);
+        const sql = await fs.readFile(filePath, 'utf-8');
+        console.log(`Migration SQL for ${file}:`, sql);
+
+        await db.tx(async t => {
+          await t.none(sql);
+          await t.none(
+            'INSERT INTO migrations (name) VALUES ($1)',
+            [file]
+          );
+        });
+        console.log(`Completed migration: ${file}`);
+      }
+    }
+
+    console.log('All migrations completed successfully');
   } catch (error) {
-    console.error('Error in afterAll cleanup:', error);
+    console.error('Migration failed:', error);
     throw error;
   }
+}
+
+function getTestFilePath(): string {
+  const testPath = expect.getState().testPath;
+  return testPath || 'unknown-test-file';
+}
+
+afterAll(async () => {
+  await db.$pool.end(); // Close all connections in the pool
 }); 

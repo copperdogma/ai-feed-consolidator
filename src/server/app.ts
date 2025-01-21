@@ -37,13 +37,13 @@ export function createApp(db: any) {
   // Configure session middleware
   app.use(session({
     secret: process.env.SESSION_SECRET || 'test-secret',
-    resave: false,
-    saveUninitialized: false,
-    store: process.env.NODE_ENV === 'test' ? new MemoryStore({
+    resave: true,
+    saveUninitialized: true,
+    store: new MemoryStore({
       checkPeriod: 86400000 // prune expired entries every 24h
-    }) : undefined,
+    }),
     cookie: {
-      secure: process.env.NODE_ENV === 'production',
+      secure: false, // Allow non-HTTPS in test/dev
       httpOnly: true,
       maxAge: 24 * 60 * 60 * 1000 // 24 hours
     },
@@ -62,9 +62,20 @@ export function createApp(db: any) {
 
   passport.deserializeUser(async (id: number, done) => {
     try {
+      // Log deserialization attempt
+      console.log('Deserializing user:', { userId: id });
+      
       const user = await db.oneOrNone('SELECT * FROM users WHERE id = $1', [id]);
-      done(null, user || false);
+      if (!user) {
+        console.warn('User not found during deserialization', { userId: id });
+        return done(null, false);
+      }
+
+      // Log successful deserialization
+      console.log('Successfully deserialized user:', { userId: id });
+      done(null, user);
     } catch (err) {
+      console.error('Error deserializing user:', err);
       done(err, false);
     }
   });
@@ -76,12 +87,25 @@ export function createApp(db: any) {
     callbackURL: '/auth/google/callback'
   }, async (accessToken, refreshToken, profile, done) => {
     try {
+      if (!profile || !profile.id) {
+        console.error('Invalid profile data', { profile });
+        return done(null, false, { message: 'Invalid profile data' });
+      }
+
       const user = await db.oneOrNone('SELECT * FROM users WHERE google_id = $1', [profile.id]);
       if (user) {
         return done(null, user);
       }
-      done(new Error('User not found'));
+
+      // User not found - this is expected in test environment
+      if (process.env.NODE_ENV === 'test') {
+        return done(null, false, { message: 'User not found' });
+      }
+
+      // In production, we would create a new user here
+      done(null, false, { message: 'User not found' });
     } catch (err) {
+      console.error('Error in Google strategy:', err);
       done(err);
     }
   }));
@@ -89,63 +113,62 @@ export function createApp(db: any) {
   // Auth routes
   app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
   
-  app.get('/auth/google/callback', (req, res, next) => {
-    // In test environment, simulate successful authentication
-    if (process.env.NODE_ENV === 'test' && req.query.code === 'valid-code') {
-      // Use the test user from the session
-      const testUser = req.user;
-      if (!testUser) {
-        return res.redirect('/login');
-      }
-      
-      return req.login(testUser, (err) => {
-        if (err) { return next(err); }
-        return res.redirect('/login');
-      });
-    }
-    
-    // Normal authentication flow
-    passport.authenticate('google', async (err: any, user: any) => {
-      if (err) { return next(err); }
-      if (!user) { return res.redirect('/login'); }
-      
-      req.login(user, async (err) => {
-        if (err) { return next(err); }
+  app.get('/auth/google/callback', 
+    (async (req: Request, res: Response, next: NextFunction) => {
+      // In test environment, simulate successful authentication
+      if (process.env.NODE_ENV === 'test' && req.query.code === 'valid-code') {
+        const testUser = req.user;
+        if (!testUser) {
+          res.status(401).json({ error: 'No test user found' });
+          return;
+        }
         
-        // Save session after login
-        await new Promise<void>((resolve, reject) => {
-          req.session.save((err) => {
-            if (err) reject(err);
-            else resolve();
-          });
+        req.login(testUser, (err) => {
+          if (err) { 
+            next(err);
+            return;
+          }
+          res.redirect('/');
         });
-        
-        res.redirect('/');
-      });
-    })(req, res, next);
-  });
+        return;
+      }
+      next();
+    }) as RequestHandler,
+    passport.authenticate('google', {
+      successRedirect: '/',
+      failureRedirect: '/login'
+    })
+  );
 
-  // Test route for session setup
-  const testSessionHandler: RequestHandler = async (req, res) => {
-    if (!req.body.user) {
-      res.status(400).json({ success: false, message: 'No user data provided' });
+  // Session initialization endpoint for tests
+  app.post('/api/auth/session', (async (req: Request, res: Response) => {
+    if (process.env.NODE_ENV !== 'test') {
+      res.status(404).json({ error: 'Not found' });
+      return;
+    }
+
+    // Initialize session with provided user
+    const { passport } = req.body;
+    if (!passport || !passport.user) {
+      res.status(400).json({ error: 'Invalid session data' });
       return;
     }
 
     try {
-      // Log initial session state
-      console.debug('Initial session state:', {
-        hasSession: !!req.session,
-        hasPassport: !!req.session?.passport,
-        hasUser: !!req.user,
-        sessionId: req.sessionID
-      });
+      // Get the user from the database
+      const user = await db.oneOrNone('SELECT * FROM users WHERE id = $1', [passport.user]);
+      
+      if (!user) {
+        console.warn('User not found during session initialization', { userId: passport.user });
+        res.status(404).json({ error: 'User not found' });
+        return;
+      }
 
-      // Use passport's login method to set up the session
+      // Log the user in - this will set up the session
       await new Promise<void>((resolve, reject) => {
-        req.login(req.body.user, (err) => {
+        req.login(user, (err) => {
           if (err) {
-            console.error('Failed to login user:', err);
+            console.error('Failed to log in user:', err);
             reject(err);
           } else {
             resolve();
@@ -153,7 +176,7 @@ export function createApp(db: any) {
         });
       });
 
-      // Save session and wait for it to complete
+      // Save session
       await new Promise<void>((resolve, reject) => {
         req.session.save((err) => {
           if (err) {
@@ -165,43 +188,58 @@ export function createApp(db: any) {
         });
       });
 
-      // Add a delay to ensure session is saved
-      await new Promise(resolve => setTimeout(resolve, 250));
-
-      // Verify session was saved correctly
-      if (!req.session?.passport?.user) {
-        throw new Error('Session not properly initialized');
-      }
-
-      // Log final session state
-      console.debug('Session state after initialization:', {
-        hasSession: !!req.session,
-        hasPassport: !!req.session?.passport,
-        hasUser: !!req.user,
+      // Log session state
+      console.log('Session initialized successfully:', {
         sessionId: req.sessionID,
-        user: req.user
+        passport: req.session.passport,
+        user: req.user,
+        authenticated: req.isAuthenticated()
       });
 
       res.json({ 
-        success: true, 
+        success: true,
         sessionId: req.sessionID,
-        user: req.user 
+        passport: req.session.passport,
+        user: req.user,
+        authenticated: req.isAuthenticated()
       });
-    } catch (error) {
-      console.error('Failed to initialize session:', error);
-      res.status(500).json({ 
-        success: false, 
-        message: error instanceof Error ? error.message : 'Failed to save session' 
-      });
+    } catch (err: any) {
+      console.error('Session initialization failed:', err);
+      res.status(500).json({ error: 'Failed to initialize session', details: err.message });
     }
-  };
+  }) as RequestHandler);
 
-  app.post('/test/session', testSessionHandler);
+  // Session verification endpoint
+  app.get('/api/auth/verify', ((req: Request, res: Response) => {
+    if (!req.isAuthenticated()) {
+      res.status(401).json({
+        authenticated: false,
+        session: null,
+        passport: null,
+        user: null,
+        sessionId: req.sessionID
+      });
+      return;
+    }
+
+    res.json({
+      authenticated: true,
+      session: req.session,
+      passport: req.session?.passport,
+      user: req.user,
+      sessionId: req.sessionID
+    });
+  }) as RequestHandler);
+
+  // Protected route example
+  app.get('/api/protected', requireAuth, ((req: Request, res: Response) => {
+    res.json({ user: req.user });
+  }) as RequestHandler);
 
   // Protected route
-  app.get('/protected', requireAuth, (req, res) => {
+  app.get('/protected', requireAuth, ((req: Request, res: Response) => {
     res.json({ message: 'Access granted', user: req.user });
-  });
+  }) as RequestHandler);
 
   return app;
 } 

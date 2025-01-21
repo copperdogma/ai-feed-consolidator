@@ -4,10 +4,9 @@ import type { User } from '../services/db';
 
 describe('Database Cleanup', () => {
   let testUser: User;
-  let cleanupCount = 0;
 
   beforeEach(async () => {
-    await cleanDatabase();
+    await cleanDatabase(db);
     testUser = await createTestUser();
   });
 
@@ -26,7 +25,7 @@ describe('Database Cleanup', () => {
     expect(Number(beforeCounts.preferences.count)).toBeGreaterThan(0);
 
     // Perform cleanup
-    await cleanDatabase();
+    await cleanDatabase(db);
 
     // Verify all tables are empty
     const afterCounts = await db.tx(async t => {
@@ -46,7 +45,7 @@ describe('Database Cleanup', () => {
 
   it('should maintain data consistency during concurrent operations', async () => {
     // Start a cleanup operation
-    const cleanup = cleanDatabase();
+    const cleanup = cleanDatabase(db);
     
     // Try to create a user during cleanup
     const createUserPromise = createTestUser();
@@ -78,7 +77,7 @@ describe('Database Cleanup', () => {
     const startTime = Date.now();
     
     // Perform cleanup
-    await cleanDatabase();
+    await cleanDatabase(db);
     
     // Verify cleanup completed within a reasonable time
     const endTime = Date.now();

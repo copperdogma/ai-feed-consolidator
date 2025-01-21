@@ -38,9 +38,15 @@ passport.use(
     },
     async (req: Request, accessToken: string, refreshToken: string, profile: Profile, done: Function) => {
       try {
+        // Validate profile data
+        if (!profile.id || !profile.emails?.[0]?.value) {
+          logger.error({ profile }, 'Invalid profile data');
+          return done(new Error('Invalid profile data'));
+        }
+
         const result = await UserService.findOrCreateUser({
           googleId: profile.id,
-          email: profile.emails?.[0]?.value || '',
+          email: profile.emails[0].value,
           displayName: profile.displayName || '',
           avatarUrl: profile.photos?.[0]?.value || null,
         });

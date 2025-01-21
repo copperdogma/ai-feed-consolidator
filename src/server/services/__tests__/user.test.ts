@@ -1,20 +1,14 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
-import { db, createTestUser } from '../../__tests__/setup';
+import { db, createTestUser, cleanDatabase } from '../../__tests__/setup';
 import { UserService } from '../user';
 import type { Profile } from 'passport-google-oauth20';
 
 describe('UserService', () => {
   let testUser: any;
 
-  // Set up test user once for all tests
-  beforeAll(async () => {
-    // Create test user with preferences in a single query
-    testUser = await createTestUser('user');
-  });
-
   // Clean up database before each test
   beforeEach(async () => {
-    await db.none('TRUNCATE TABLE users CASCADE');
+    await cleanDatabase(db);
   });
 
   describe('findOrCreateGoogleUser', () => {
@@ -120,7 +114,7 @@ describe('UserService', () => {
 
   describe('getUserProfile', () => {
     it('should return user and preferences if found', async () => {
-      const user = await createTestUser('profile');
+      const user = await createTestUser();
       const result = await UserService.getUserProfile(user.id);
       expect(result).toBeDefined();
       expect(result?.user.id).toBe(user.id);
@@ -146,7 +140,7 @@ describe('UserService', () => {
 
   describe('updatePreferences', () => {
     it('should update user preferences', async () => {
-      const user = await createTestUser('prefs');
+      const user = await createTestUser();
       const updates = {
         theme: 'dark',
         emailNotifications: false,
