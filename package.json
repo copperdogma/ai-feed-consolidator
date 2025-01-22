@@ -38,6 +38,7 @@
     "express-pino-logger": "^7.0.0",
     "express-session": "^1.18.1",
     "memorystore": "^1.6.7",
+    "openai": "^4.79.4",
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",
     "pg-promise": "^11.10.2",

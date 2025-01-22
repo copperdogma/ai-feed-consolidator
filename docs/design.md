@@ -447,3 +447,33 @@ The application uses Google OAuth 2.0 for authentication, providing a secure and
 ## API Design
 
 [To be continued with API documentation...] 
+
+## Feed Service Implementations
+
+### Feedly
+
+#### API Response Structure
+
+The Feedly API returns an array of feed items with the following structure:
+
+Required fields:
+- `id`: Unique identifier for the item
+- `title`: Article title
+- `content`: Full article content (HTML)
+- `summary`: Brief content summary
+- `author`: Content author
+- `published`: Publication timestamp
+- `origin`: Source information including title and URL
+- `keywords`: Topic tags array
+- `categories`: User-defined categories
+- `tags`: System tags (e.g. "read", "saved")
+
+Optional fields:
+- `canonicalUrl`: Original article URL
+- `language`: Content language code (e.g. "en")
+- `readTime`: Estimated reading time
+- `visual`: Image metadata including URL and dimensions
+- `engagement`: Engagement metrics
+- `engagementRate`: Normalized engagement score
+
+This structure will need to be normalized into our common feed item format for consistent processing across different feed sources. 

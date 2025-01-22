@@ -16,7 +16,7 @@ Core Principles:
 Document Structure:
 - docs/spec.md: Requirements contract and success criteria. When resolving spec questions, remove the queston and integrate the answer into the spec.
 - docs/design.md: Technical implementation details and decisions. When updating, including relevant links and rationale for design decisions.
-- docs/todo.md: Active tasks, bugs, and future work. Ensure tasks remained organized and prioritized. Completed todos should be moved to the log.md as part of the next milestone.
+- docs/todo.md: Active tasks, bugs, and future work. Ensure tasks remained organized and prioritized. Completed todos should be moved to the log.md as part of the next milestone. A top section should be reserved for the task we're currently working on.
 - docs/log.md: Project history and milestone notes, newest at top, with each milestone header in format: YYYYMMDD: [Milestone Name]
 
 Document Format:

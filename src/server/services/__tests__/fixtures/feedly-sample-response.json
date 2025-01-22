@@ -1,0 +1,319 @@
+[
+  {
+    "fingerprint": "2b2c6609",
+    "id": "VjcRlowJ1JZG6K6MBZsEXSCKVSffV6xk+HTeiwaHF48=_194885a6161:1dd33b2:d4d0980a",
+    "language": "en",
+    "originId": "https://www.technologyreview.com/?p=1110192",
+    "keywords": [
+      "Artificial intelligence",
+      "App",
+      "artificial intelligence",
+      "The Algorithm"
+    ],
+    "origin": {
+      "streamId": "feed/http://www.technologyreview.com/newsfeed/rss/trrd_newsfeed.xml",
+      "title": "MIT Technology Review",
+      "htmlUrl": "https://www.technologyreview.com"
+    },
+    "content": {
+      "content": "<p><em>This story originally appeared in The Algorithm, our weekly newsletter on AI. To get stories like this in your inbox first, <a href=\"https://forms.technologyreview.com/newsletters/ai-demystified-the-algorithm/\">sign up here</a>.</em></p>\n<p>Peering into the body to find and diagnose cancer is all about spotting patterns. Radiologists use x-rays and magnetic resonance imaging to illuminate tumors, and pathologists examine tissue from kidneys, livers, and other areas under microscopes and look for patterns that show how severe a cancer is, whether particular treatments could work, and where the malignancy may spread.</p>\n<p>In theory, artificial intelligence should be great at helping out. “Our job is pattern recognition,” says Andrew Norgan, a pathologist and medical director of the Mayo Clinic’s digital pathology platform. “We look at the slide and we gather pieces of information that have been proven to be important.” </p>\n<p>Visual analysis is something that AI has gotten quite good at since the first image recognition models began taking off nearly 15 years ago. Even though no model will be perfect, you can imagine a powerful algorithm someday catching something that a human pathologist missed, or at least speeding up the process of getting a diagnosis. We’re starting to see lots of new efforts to build such a model—at least seven attempts in the last year alone—but they all remain experimental.<strong> </strong>What will it take to make them good enough to be used in the real world?</p>\n<p>Details about the latest effort to build such a model, led by the AI health company Aignostics with the Mayo Clinic, were <a href=\"https://arxiv.org/abs/2501.05409\">published</a> on arXiv earlier this month. The paper has not been peer-reviewed, but it reveals much about the challenges of bringing such a tool to real clinical settings. </p>\n<p>The model, called Atlas, was trained on 1.2 million tissue samples from 490,000 cases. Its accuracy was tested against six other leading AI pathology models. These models compete on shared tests like classifying breast cancer images or grading tumors, where the model’s predictions are compared with the correct answers given by human pathologists. Atlas beat rival models on six out of nine tests. It earned its highest score for categorizing cancerous colorectal tissue, reaching the same conclusion as human pathologists 97.1% of the time. For another task, though—classifying tumors from prostate cancer biopsies—Atlas beat the other models’ high scores with a score of just 70.5%. Its average across nine benchmarks showed that it got the same answers as human experts 84.6% of the time. </p>\n<p>Let’s think about what this means. The best way to know what’s happening to cancerous cells in tissues is to have a sample examined by a pathologist, so that’s the performance that AI models are measured against. The best models are approaching humans in particular detection tasks but lagging behind in many others. So how good does a model have to be to be clinically useful?</p>\n<p>“Ninety percent is probably not good enough. You need to be even better,” says Carlo Bifulco, chief medical officer at Providence Genomics and co-creator of GigaPath, one of the other AI pathology models examined in the Mayo Clinic study. But, Bifulco says, AI models that don’t score perfectly can still be useful in the short term, and could potentially help pathologists speed up their work and make diagnoses more quickly.    </p>\n<p>What obstacles are getting in the way of better performance? Problem number one is training data.</p>\n<p>“Fewer than 10% of pathology practices in the US are digitized,” Norgan says. That means tissue samples are placed on slides and analyzed under microscopes, and then stored in massive registries without ever being documented digitally. Though European practices tend to be more digitized, and there are <a href=\"https://www.nature.com/articles/s41746-022-00635-4\">efforts</a> underway to create shared data sets of tissue samples for AI models to train on, there’s still not a ton to work with. </p>\n<p>Without diverse data sets, AI models struggle to identify the wide range of abnormalities that human pathologists have learned to interpret. That includes for rare diseases, says Maximilian Alber, cofounder and CTO of Aignostics. Scouring the publicly available databases for tissue samples of particularly rare diseases, “you’ll find 20 samples over 10 years,” he says. </p>\n<p>Around 2022, the Mayo Clinic foresaw that this lack of training data would be a problem. It decided to digitize all of its own pathology practices moving forward, along with 12 million slides from its archives dating back decades (patients had consented to their being used for research). It hired a company to build a robot that began taking high-resolution photos of the tissues, working through up to a million samples per month. From these efforts, the team was able to collect the 1.2 million high-quality samples used to train the Mayo model. </p>\n<p>This brings us to problem number two for using AI to spot cancer. Tissue samples from biopsies are tiny—often just a couple of millimeters in diameter—but are magnified to such a degree that digital images of them contain more than 14 billion pixels. That makes them about 287,000 times larger than images used to train the best AI image recognition models to date. </p>\n<p>“That obviously means lots of storage costs and so forth,” says Hoifung Poon, an AI researcher at Microsoft who worked with Bifulco to create GigaPath, which was featured in <a href=\"https://www.nature.com/articles/s41586-024-07441-w\"><em>Nature</em></a><em> </em>last year. But it also forces important decisions about which bits of the image you use to train the AI model, and which cells you might miss in the process. To make Atlas, the Mayo Clinic used what’s referred to as a tile method, essentially creating lots of snapshots from the same sample to feed into the AI model. Figuring out how to select these tiles is both art and science, and it’s not yet clear which ways of doing it lead to the best results.</p>\n<p>Thirdly, there’s the question of which benchmarks are most important for a cancer-spotting AI model to perform well on. The Atlas researchers tested their model in the challenging domain of molecular-related benchmarks, which involves trying to find clues from sample tissue images to guess what’s happening on a molecular level. Here’s an example: Your body’s mismatch repair genes are of particular concern for cancer, because they catch errors made when your DNA gets replicated. If these errors aren’t caught, they can drive the development and progression of cancer. </p>\n<p>“Some pathologists might tell you they kind of get a feeling when they think something’s mismatch-repair deficient based on how it looks,” Norgan says. But pathologists don’t act on that gut feeling alone. They can do molecular testing for a more definitive answer. What if instead, Norgan says, we can use AI to predict what’s happening on the molecular level? It’s an experiment: Could the AI model spot underlying molecular changes that humans can’t see?</p>\n<p>Generally no, it turns out. Or at least not yet. Atlas’s average for the molecular testing was 44.9%. That’s the best performance for AI so far, but it shows this type of testing has a long way to go. </p>\n<p>Bifulco says Atlas represents incremental but real progress. “My feeling, unfortunately, is that everybody’s stuck at a similar level,” he says. “We need something different in terms of models to really make dramatic progress, and we need larger data sets.”</p>\n<hr class=\"wp-block-separator\">\n<h1 class=\"wp-block-heading\">Now read the rest of The Algorithm</h1>\n<h3 class=\"wp-block-heading\">Deeper Learning</h3>\n<p><strong>OpenAI has created an AI model for longevity science</strong></p>\n<p>AI has long had its fingerprints on the science of protein folding. But OpenAI now says it’s created a model that can <em>engineer</em> proteins, turning regular cells into stem cells. That goal has been pursued by companies in longevity science, because stem cells can produce any other tissue in the body and, in theory, could be a starting point for rejuvenating animals, building human organs, or providing supplies of replacement cells. </p>\n<p><strong>Why it matters:</strong> The work was a product of OpenAI’s collaboration with the longevity company Retro Labs, in which Sam Altman <a href=\"https://www.technologyreview.com/2023/03/08/1069523/sam-altman-investment-180-million-retro-biosciences-longevity-death/\">invested</a> $180 million. It represents OpenAI’s first model focused on biological data and its first public claim that its models can deliver scientific results. The AI model reportedly engineered more effective proteins, and more quickly, than the company’s scientists could. But outside scientists can’t evaluate the claims until the studies have been published.  <a href=\"https://www.technologyreview.com/2025/01/17/1110086/openai-has-created-an-ai-model-for-longevity-science/\">Read more from Antonio Regalado</a>.</p>\n<h3 class=\"wp-block-heading\">Bits and Bytes</h3>\n<p><strong>What we know about the TikTok ban</strong></p>\n<p>The popular video app went dark in the United States late Saturday and then came back around noon on Sunday, even as a law banning it took effect. (<a href=\"https://www.nytimes.com/article/what-we-know-tiktok.html\">The New York Times</a>)</p>\n<p><strong>Why Meta might not end up like X </strong></p>\n<p>X lost lots of advertising dollars as Elon Musk changed the platform’s policies. But Facebook and Instagram’s massive scale make them hard platforms for advertisers to avoid. (<a href=\"https://www.wsj.com/tech/meta-going-down-twitters-path-wont-end-the-same-way-96d3ac82?mod=tech_lead_pos3\">Wall Street Journal</a>)</p>\n<p><strong>What to expect from Neuralink in 2025</strong></p>\n<p>More volunteers will get Elon Musk’s brain implant, but don’t expect a product soon. (<a href=\"https://www.technologyreview.com/2025/01/16/1110017/what-to-expect-from-neuralink-in-2025/\">MIT Technology Review</a>)</p>\n<p><strong>A former fact-checking outlet for Meta signed a new deal to help train AI models</strong></p>\n<p>Meta paid media outlets like Agence France-Presse for years to do fact checking on its platforms. Since Meta announced it would shutter those programs, Europe’s leading AI company, Mistral, has signed a deal with AFP to use some of its content in its AI models. (<a href=\"https://www.ft.com/content/9200122d-bb4d-4f13-b9db-4991815026b4\">Financial Times</a>)</p>\n<p><strong>OpenAI’s AI reasoning model “thinks” in Chinese sometimes, and no one really knows why</strong></p>\n<p>While it comes to its response, the model often switches to Chinese, perhaps a reflection of the fact that many data labelers are based in China. (<a href=\"https://techcrunch.com/2025/01/14/openais-ai-reasoning-model-thinks-in-chinese-sometimes-and-no-one-really-knows-why/\">Tech Crunch</a>)</p>",
+      "direction": "ltr"
+    },
+    "title": "Why it’s so hard to use AI to diagnose cancer",
+    "published": 1737453600000,
+    "crawled": 1737454412129,
+    "author": "James O'Donnell",
+    "summary": {
+      "content": "This story originally appeared in The Algorithm, our weekly newsletter on AI. To get stories like this in your inbox first, sign up here. Peering into the body to find and diagnose cancer is all about spotting patterns. Radiologists use x-rays and magnetic resonance imaging to illuminate tumors, and pathologists examine tissue from kidneys, livers,…",
+      "direction": "ltr"
+    },
+    "alternate": [
+      {
+        "href": "https://www.technologyreview.com/2025/01/21/1110192/why-its-so-hard-to-use-ai-to-diagnose-cancer/",
+        "type": "text/html"
+      }
+    ],
+    "visual": {
+      "width": 1200,
+      "contentType": "image/png",
+      "url": "https://wp.technologyreview.com/wp-content/uploads/2025/01/cancer-detection.png?resize=1200,600",
+      "processor": "feedly-nikon-v3.1",
+      "height": 600,
+      "expirationDate": 1740062737538,
+      "edgeCacheUrl": "https://lh3.googleusercontent.com/WiAKfiFGa7RVMB7utrl4rPcN63fyjqevMzgePJzNpE4jO74ke6g9YH6s5XOZPgpMYoUzzxA_adLUonGBDfB6sezD-A_P0R77r62tNbY"
+    },
+    "canonicalUrl": "https://www.technologyreview.com/2025/01/21/1110192/why-its-so-hard-to-use-ai-to-diagnose-cancer/",
+    "unread": false,
+    "readTime": 0,
+    "categories": [
+      {
+        "id": "user/558f1c2c-49b5-4ce9-a50d-3612797794d0/category/Science and Techmology",
+        "label": "Science and Techmology"
+      }
+    ],
+    "tags": [
+      {
+        "id": "user/558f1c2c-49b5-4ce9-a50d-3612797794d0/tag/global.read",
+        "label": ""
+      },
+      {
+        "id": "user/558f1c2c-49b5-4ce9-a50d-3612797794d0/tag/global.saved",
+        "label": "Saved For Later"
+      }
+    ],
+    "actionTimestamp": 1737519208389,
+    "engagement": 23,
+    "engagementRate": 2.09
+  },
+  {
+    "fingerprint": "e3b6fdb0",
+    "id": "VjcRlowJ1JZG6K6MBZsEXSCKVSffV6xk+HTeiwaHF48=_194899cd881:1fa7aa3:d4d0980a",
+    "language": "en",
+    "originId": "https://www.technologyreview.com/?p=1110131",
+    "recrawled": 1737488465839,
+    "updateCount": 1,
+    "keywords": [
+      "Climate change and energy",
+      "App"
+    ],
+    "content": {
+      "content": "<p>Forget massive steel tanks—some scientists want to make chemicals with the help of rocks deep beneath Earth’s surface.</p>\n<p>New research shows that ammonia, a chemical crucial for fertilizer, can be produced from rocks at temperatures and pressures that are common in the subsurface. The research was published today in <em>Joule</em>, and <em>MIT Technology Review</em> can exclusively report that a new company, called <a rel=\"noreferrer noopener\" href=\"https://engineventures.com/companies/addis-energy\" target=\"_blank\">Addis Energy</a>, was founded to commercialize the process.</p>\n<p>Ammonia is used in most fertilizers and is a vital part of our modern food system. It’s also being considered for use as a green fuel in industries like transoceanic shipping. The problem is that current processes used to make ammonia require a lot of energy and produce huge amounts of the greenhouse gases that cause climate change—over 1% of the global total. The new study finds that the planet’s internal conditions can be used to produce ammonia in a much cleaner process. </p>\n<p>“Earth can be a factory for chemical production,” says Iwnetim Abate, an MIT professor and author of <a rel=\"noreferrer noopener\" href=\"https://www.cell.com/joule/fulltext/S2542-4351(24)00541-5\" target=\"_blank\">the new study</a>.</p>\n<p>This idea could be a major change for the chemical industry, which today relies on huge facilities running reactions at extremely high temperatures and pressures to make ammonia.</p>\n<p>The key ingredients for ammonia production are sources of nitrogen and hydrogen. Much of the focus on cleaner production methods currently lies in finding new ways to make hydrogen, since that chemical makes up the bulk of ammonia’s climate footprint, says Patrick Molloy, a principal at the nonprofit research agency Rocky Mountain Institute. </p>\n<p>Recently, researchers and companies have located naturally occurring deposits of hydrogen underground. Iron-rich rocks tend to drive reactions that produce the gas, and these natural deposits could provide a source of low-cost, low-emissions hydrogen.</p>\n<p>While geologic hydrogen is still in its infancy as an industry, some researchers are hoping to help the process along by stimulating production of hydrogen underground. With the right rocks, heat, and a catalyst, you can produce hydrogen cheaply and without emitting large amounts of climate pollution.</p>\n<p>Hydrogen can be difficult to transport, though, so Abate was interested in going one step further by letting the conditions underground do the hard work in powering chemical reactions that transform hydrogen and nitrogen into ammonia. “As you dig, you get heat and pressure for free,” he says.</p>\n<p>To test out how this might work, Abate and his team crushed up iron-rich minerals and added nitrates (a nitrogen source), water (a hydrogen source), and a catalyst to help reactions along in a small reactor in the lab. They found that even at relatively low temperatures and pressures, they could make ammonia in a matter of hours. If the process were scaled up, the researchers estimate, one well could produce 40,000 kilograms of ammonia per day. </p>\n<p>While the reactions tend to go faster at high temperature and pressure, the researchers found that ammonia production could be an economically viable process even at 130 °C (266 °F) and a little over two atmospheres of pressure, conditions that would be accessible at depths reachable with existing drilling technology. </p>\n<p>While the reactions work in the lab, there’s a lot of work to do to determine whether, and how, the process might actually work in the field. One thing the team will need to figure out is how to keep reactions going, because in the reaction that forms ammonia, the surface of the iron-rich rocks will be oxidized, leaving them in a state where they can’t keep reacting. But Abate says the team is working on controlling how thick the unusable layer of rock is, and its composition, so the chemical reactions can continue.</p>\n<p>To commercialize this work, Abate is cofounding a company called Addis Energy with $4.25 million in pre-seed funds from investors including Engine Ventures. His cofounders include Michael Alexander and Charlie Mitchell (who have both spent time in the oil and gas industry) and Yet-Ming Chiang, an MIT professor and serial entrepreneur. The company will work on scaling up the research, including finding potential sites with the geological conditions to produce ammonia underground. </p>\n<p>The good news for scale-up efforts is that much of the necessary technology already exists in oil and gas operations, says Alexander, Addis’s CEO. A field-deployed system will involve drilling, pumping fluid down into the ground, and extracting other fluids from beneath the surface, all very common operations in that industry. “There’s novel chemistry that’s wrapped in an oil and gas package,” he says. </p>\n<p>The team will also work on refining cost estimates for the process and gaining a better understanding of safety and sustainability, Abate says. Ammonia is a toxic industrial chemical, but it’s common enough for there to be established procedures for handling, storing, and transporting it, says RMI’s Molloy.</p>\n<p>Judging from the researchers’ early estimates, ammonia produced with this method could cost up to $0.55 per kilogram. That’s more than ammonia produced with fossil fuels today ($0.40/kg), but the technique would likely be less expensive than other low-emissions methods of producing the chemical. Tweaks to the process, including using nitrogen from the air instead of nitrates, could help cut costs further, even as low as $0.20/kg. </p>\n<p>New approaches to making ammonia could be crucial for climate efforts. “It’s a chemical that’s essential to our way of life,” says Karthish Manthiram, a professor at Caltech who studies electrochemistry, including alternative ammonia production methods.</p>\n<p>The team’s research appears to be designed with scalability in mind from the outset, and using Earth itself as a reactor is the kind of thinking needed to accelerate the long-term journey to sustainable chemical production, Manthiram adds.</p>\n<p>While the company focuses on scale-up efforts, there’s plenty of fundamental work left for Abate and other labs to do to understand what’s going on during the reactions at the atomic level, particularly at the interface between the rocks and the reacting fluid. </p>\n<p>Research in the lab is exciting, but it’s only the first step, Abate says. The next one is seeing if this actually works in the field. </p>\n<p><em>Correction: Due to a unit typo in the journal article, a previous version of this story misstated the amount of ammonia each well could theoretically produce. The estimate is 40,000 kilograms of ammonia per day, not 40,000 tons.</em></p>",
+      "direction": "ltr"
+    },
+    "origin": {
+      "streamId": "feed/http://www.technologyreview.com/newsfeed/rss/trrd_newsfeed.xml",
+      "title": "MIT Technology Review",
+      "htmlUrl": "https://www.technologyreview.com"
+    },
+    "title": "A new company plans to use Earth as a chemical reactor",
+    "published": 1737475200000,
+    "crawled": 1737475545217,
+    "author": "Casey Crownhart",
+    "summary": {
+      "content": "Forget massive steel tanks—some scientists want to make chemicals with the help of rocks deep beneath Earth’s surface. New research shows that ammonia, a chemical crucial for fertilizer, can be produced from rocks at temperatures and pressures that are common in the subsurface. The research was published today in Joule, and MIT Technology Review can…",
+      "direction": "ltr"
+    },
+    "alternate": [
+      {
+        "href": "https://www.technologyreview.com/2025/01/21/1110131/ammonia-addis-energy/",
+        "type": "text/html"
+      }
+    ],
+    "visual": {
+      "width": 1200,
+      "contentType": "image/jpeg",
+      "url": "https://wp.technologyreview.com/wp-content/uploads/2025/01/geo-plant2.jpg?resize=1200,600",
+      "processor": "feedly-nikon-v3.1",
+      "height": 600,
+      "expirationDate": 1740069552211,
+      "edgeCacheUrl": "https://lh3.googleusercontent.com/8K2enGaUJvRmaxlVN5jAKl5bRWglXhEUAnQ5QM6Fh6vTvkQxoxU5_aYBSHafF_PmO2Z_c-3nznyuKvfulLVBjhJ9ne0h3Dej3WnSug"
+    },
+    "canonicalUrl": "https://www.technologyreview.com/2025/01/21/1110131/ammonia-addis-energy/",
+    "unread": false,
+    "readTime": 0,
+    "categories": [
+      {
+        "id": "user/558f1c2c-49b5-4ce9-a50d-3612797794d0/category/Science and Techmology",
+        "label": "Science and Techmology"
+      }
+    ],
+    "tags": [
+      {
+        "id": "user/558f1c2c-49b5-4ce9-a50d-3612797794d0/tag/global.read",
+        "label": ""
+      },
+      {
+        "id": "user/558f1c2c-49b5-4ce9-a50d-3612797794d0/tag/global.saved",
+        "label": "Saved For Later"
+      }
+    ],
+    "actionTimestamp": 1737519202347,
+    "engagement": 13,
+    "engagementRate": 1.44
+  },
+  {
+    "fingerprint": "59140ac",
+    "id": "ghxOK/mJA7U6+8rdPIYhZYEU6PirOTv4PT7/yu6S+xE=_1948704debc:1d23176:c32197dc",
+    "language": "en",
+    "originId": "https://cleantechnica.com/?p=347032",
+    "keywords": [
+      "Clean Transport",
+      "Electric Cars",
+      "Electric Vehicles",
+      "Tesla",
+      "Tesla Model Y"
+    ],
+    "origin": {
+      "streamId": "feed/http://cleantechnica.com/feed/",
+      "title": "CleanTechnica",
+      "htmlUrl": "https://cleantechnica.com/"
+    },
+    "title": "Why I Think The Tesla Model Y Might Be Uniquely Good For People Nearing Retirement",
+    "published": 1737431827000,
+    "crawled": 1737432030908,
+    "author": "Paul Fosse",
+    "summary": {
+      "content": "<p>This article explains the unique financial, safety, and self-driving advantages of EVs in general and the Tesla Model Y in particular. I’ve long been a fan of Tesla’s Model Y. I wrote 3 articles the day of the unveiling (almost 6 years ago), including this one claiming the 3rd row ... [continued]</p>\n<p>The post <a href=\"https://cleantechnica.com/2025/01/20/why-i-think-the-tesla-model-y-might-be-uniquely-good-for-people-nearing-retirement/\">Why I Think The Tesla Model Y Might Be Uniquely Good For People Nearing Retirement</a> appeared first on <a href=\"https://cleantechnica.com\">CleanTechnica</a>.</p>",
+      "direction": "ltr"
+    },
+    "alternate": [
+      {
+        "href": "https://cleantechnica.com/2025/01/20/why-i-think-the-tesla-model-y-might-be-uniquely-good-for-people-nearing-retirement/",
+        "type": "text/html"
+      }
+    ],
+    "canonicalUrl": "https://cleantechnica.com/2025/01/20/why-i-think-the-tesla-model-y-might-be-uniquely-good-for-people-nearing-retirement/",
+    "unread": false,
+    "readTime": 0,
+    "categories": [
+      {
+        "id": "user/558f1c2c-49b5-4ce9-a50d-3612797794d0/category/Science and Techmology",
+        "label": "Science and Techmology"
+      }
+    ],
+    "tags": [
+      {
+        "id": "user/558f1c2c-49b5-4ce9-a50d-3612797794d0/tag/global.read",
+        "label": ""
+      },
+      {
+        "id": "user/558f1c2c-49b5-4ce9-a50d-3612797794d0/tag/global.saved",
+        "label": "Saved For Later"
+      }
+    ],
+    "actionTimestamp": 1737433887911,
+    "engagement": 24,
+    "engagementRate": 3
+  },
+  {
+    "fingerprint": "e2ceda35",
+    "id": "urRMmQUIXKLuDcPrhd2BTQJHHLG9Ze8SLSjE0Bb3pOQ=_19482f50c77:17b51eb:d4d0980a",
+    "language": "en",
+    "originId": "https://www.powerelectronicsnews.com/?p=75284",
+    "keywords": [
+      "Technical Articles",
+      "Automotive",
+      "Components & Devices",
+      "EVs",
+      "Power Supplies & Energy Storage",
+      "Ultracapacitors"
+    ],
+    "origin": {
+      "streamId": "feed/https://www.powerelectronicsnews.com/feed",
+      "title": "Power Electronics News",
+      "htmlUrl": "https://www.powerelectronicsnews.com/"
+    },
+    "content": {
+      "content": "<img sizes=\"(max-width: 1000px) 100vw, 1000px\" src=\"https://www.powerelectronicsnews.com/wp-content/uploads/sites/3/2024/11/EV-charging.png?fit=1000%2C668\" width=\"1000\" alt=\"Can Ultracapacitors Power the Next Generation of EVs?\" srcset=\"https://www.powerelectronicsnews.com/wp-content/uploads/sites/3/2024/11/EV-charging.png?w=1000 1000w, https://www.powerelectronicsnews.com/wp-content/uploads/sites/3/2024/11/EV-charging.png?w=500 500w, https://www.powerelectronicsnews.com/wp-content/uploads/sites/3/2024/11/EV-charging.png?w=768 768w, https://www.powerelectronicsnews.com/wp-content/uploads/sites/3/2024/11/EV-charging.png?w=675 675w\" class=\"webfeedsFeaturedVisual wp-post-image\" height=\"668\">\n<p>Lithium-ion batteries have served the buildout of <a rel=\"noreferrer noopener\" href=\"https://www.powerelectronicsnews.com/tag/electric-vehicle/\" target=\"_blank\">electric vehicles</a> (EVs) well. They have become an accessible form of sustainable transportation, but they are far from the final vision of what EVs could be. Engineers and embedded systems professionals are seeking improved power sources through ultracapacitors. Experts believe they are the solution for mitigating the negatives of modern batteries, like life cycles and charging speeds. How true is this?</p>\n<h2 class=\"wp-block-heading\">What Advantages Do Ultracapacitors Bring to EVs?</h2>\n<p>Problems with conventional batteries are a major concern in widespread adoption, as they lead to skepticism about EV effectiveness compared to internal combustion engines. Ultracapacitors for electric vehicles will be easier to implement than most novel technologies because they are already employed in hybrid vehicles. Therefore, EVs will gain these benefits for greater consistency in eco-friendly transport.</p>\n<h3 class=\"wp-block-heading\">Rapid Charging and Cycle Lengths</h3>\n<p>EV batteries take varying times to charge, depending on the level. Yet, it is still not as convenient as a several-minute trip to fuel a gas-powered car. Recent research proves their ability to <a rel=\"noreferrer noopener\" href=\"https://www.researchgate.net/publication/355746729_Use_of_a_Buffer_Power_Source_Based_on_a_Supercapacitor_for_Starting_an_Asynchronous_Electric_Drive_under_Load\" target=\"_blank\">prevent direct inrush loading</a>, which degrades batteries. Simultaneously, they can store recovered energy during regenerative braking, which amplifies charge speed and range. Peripheral power applications like electronic power assist steering, in addition to assist braking, strengthen this.</p>\n<h3 class=\"wp-block-heading\">Long Life Cycle</h3>\n<p>Reviews suggest ultracapacitors could have a <a rel=\"noreferrer noopener\" href=\"https://www.mdpi.com/1996-1073/15/15/5683\" target=\"_blank\">potentially infinite life cycle</a> if designed properly, though other suggestions report an estimated one million cycles. Using smart load predictive systems verify configurations remain exact, voltage stays regulated and power level continues at peak performance. It saves drivers from repeated battery expenses and maintenance. Their high energy storage density also contributes to this.</p>\n<h3 class=\"wp-block-heading\">Lower Environmental Impact</h3>\n<p>Lithium-ion and other batteries are known for their immense environmental impact at the beginning of their value chain. Even though their adverse effects are mitigated by an EV’s life cycle, its ecological damage regarding raw material extraction and energy use is notable.</p>\n<p>Ultracapacitors for electric vehicles store energy <a rel=\"noreferrer noopener\" href=\"https://interestingengineering.com/science/could-ultracapacitors-replace-batteries-in-future-electric-vehicles\" target=\"_blank\">electrostatically instead of chemically</a>, providing a nontoxic alternative. Additionally, their boosted life cycle improves its life cycle assessment, making it less wasteful at its end of life.</p>\n<h3 class=\"wp-block-heading\">Temperature Control</h3>\n<p>Overheating is a concern with lithium-ion batteries to the point that varying degrees of dubious and accurate flammability concerns tarnished their reputation. Ultracapacitors overcome this negative press with more profound temperature management. Ultracapacitors <a rel=\"noreferrer noopener\" href=\"https://link.springer.com/article/10.1134/S1023193524020022\" target=\"_blank\">protect EV components from performance concerns</a> related to volatile temperatures, even in extreme conditions.</p>\n<p>Preventing fluctuations is crucial for preserving energy storage systems within the powertrain, influencing other critical efficiency metrics. Some new plug-and-play ultracapacitors can operate between <a rel=\"noreferrer noopener\" href=\"https://www.tecategroup.com/blog/?i=Tecate_Group_Announces_800_Farad_High-Capacitance_Snap-In_Ultracapacitor\" target=\"_blank\">-40 degrees Celsius to 65 degrees Celsius</a>, with even higher temperatures possible. The low resistance and lack of chemical reactions in the ultracapacitors allow less expensive, lower cooling needs for EVs.</p>\n<h2 class=\"wp-block-heading\">Challenges to Ultracapacitor Implementation</h2>\n<p>Ultracapacitors are not a recent innovation. Engineers have been using them for several decades in industry, energy, and even wearable tech. If ultracapacitors deliver so much promise for EV development, why are they not the gold standard for EV manufacturing?</p>\n<h3 class=\"wp-block-heading\">Existing EV Concerns</h3>\n<p>Apart from ultracapacitors’ unique shortcomings, every <a rel=\"noreferrer noopener\" href=\"https://revolutionized.com/dangers-of-electric-cars/\" target=\"_blank\">adoption problem related to EVs</a> also applies to ultracapacitors, too. Investments, development, and intrigue around new EV technologies only unfold if generalized interest in electrification surges. If governments and corporations increase interest for citizens and commercial entities, then more ultracapacitor implementation will follow as a result.</p>\n<h3 class=\"wp-block-heading\">Cost</h3>\n<p>Manufacturing ultracapacitor EVs costs more than standard models. While makers will invest in this, the burden will translate to customers, significantly hindering adoption.</p>\n<p>This has motivated researchers to investigate cost-saving opportunities across the car’s life. Experts looked into optimizing the costs associated with fueling and charging infrastructure in public transportation using ultracapacitors. Multi-energy management solutions were the answer, <a rel=\"noreferrer noopener\" href=\"https://www.sciencedirect.com/science/article/abs/pii/S0196890423004491\" target=\"_blank\">resulting in 46.48% reductions</a> in operating costs.</p>\n<h3 class=\"wp-block-heading\">Voltage Limitations</h3>\n<p>Ultracapacitors operate at low voltages compared to conventional EVs. If automotive manufacturers and engineers want to retrofit existing designs with them, reconfigurations or voltage converters might be necessary. Given how ultracapacitors want to streamline EV architecture, this could make the vehicle’s structure more complex than it needs to be.</p>\n<h3 class=\"wp-block-heading\">Lower Energy Density and Storage Capacity</h3>\n<p>Lithium-ion batteries store more energy per weight because of their chemical foundations. Even though regenerative braking and other power assist features extend their range, the low energy density still contributes to shorter ranges. Similarly, their storage is limited because ultracapacitors discharge energy in short bursts.</p>\n<p>Therefore, expanded storage is a research priority. One example relied on machine learning to design a new supercapacitor material to <a rel=\"noreferrer noopener\" href=\"https://www.nature.com/articles/s41467-023-40282-1\" target=\"_blank\">store four times as much energy</a> compared to regular variants. Porous carbon could be the next big deal for enhanced capacitance.</p>\n<h2 class=\"wp-block-heading\">Real-Life Applications Affecting EVs</h2>\n<p>Several companies are experimenting with ultracapacitor implementation in EVs. As these entities become thought leaders, they could inspire ultracapacitor permeation throughout the sector. Who are some of the most prominent influences?</p>\n<p>Swiss startup Morand is answering energy storage woes with its innovative hybrid ultracapacitor technology perfect for commuter EVs and electric bikes. It <a rel=\"noreferrer noopener\" href=\"https://chargedevs.com/newswire/swiss-startup-morand-launches-fast-charging-energy-storage-system-combining-batteries-and-ultracapacitors/\" target=\"_blank\">charges to 98% in two minutes</a> and scaling production of its model will strive to match pricing with lithium-ion competitors.</p>\n<p>Another partnership with the Marubeni Corporation and Skeleton Technologies <a rel=\"noreferrer noopener\" href=\"https://www.marubeni.com/en/news/2021/release/00021.html\" target=\"_blank\">hopes to expand supercapacitor marketing</a> to reach broader audiences. The collaboration tackles another barrier in ultracapacitor dissemination, which is component access. Eventually, their work could deliver the tech to European and Asian car manufacturers.</p>\n<p>While these ultracapacitor developers continue intricate research, automobile manufacturers like BMW, Audi, and Toyota are known for implementing them in some models. They have already tinkered with brake regeneration improvements and hybrid setups to see where advancements are possible. Once the industry’s players make agreements with car makers, the market could<a rel=\"noreferrer noopener\" href=\"https://www.prnewswire.com/news-releases/automotive-ultracapacitor-market-size-is-set-to-grow-by-usd-239-4-million-from-2024-2028--growing-ev-automotive-industry-to-boost-the-market-growth-technavio-302198104.html\" target=\"_blank\"> reach a worth of $239.4 million</a> by 2028.</p>\n<h2 class=\"wp-block-heading\">Beyond Ultracapacitors for Electric Vehicles</h2>\n<p>Recent research revelations will catapult ultracapacitors into a new era of EV implementation. It could alter societal assumptions about EV potential by demonstrating more of their entire operational potential. Just as lithium-ion was not the stopping point for battery development, neither should ultracapacitors. The enhancements should inspire engineers and automotive experts to continue discovering ways to improve EVs for a sustainable tomorrow.</p>\n<p>The post <a href=\"https://www.powerelectronicsnews.com/can-ultracapacitors-power-the-next-generation-of-evs/\">Can Ultracapacitors Power the Next Generation of EVs?</a> appeared first on <a href=\"https://www.powerelectronicsnews.com\">Power Electronics News</a>.</p>",
+      "direction": "ltr"
+    },
+    "title": "Can Ultracapacitors Power the Next Generation of EVs?",
+    "published": 1737363480000,
+    "crawled": 1737363885175,
+    "author": "Stefano Lovati",
+    "summary": {
+      "content": "<img sizes=\"(max-width: 1000px) 100vw, 1000px\" src=\"https://www.powerelectronicsnews.com/wp-content/uploads/sites/3/2024/11/EV-charging.png?fit=1000%2C668\" width=\"1000\" alt=\"Can Ultracapacitors Power the Next Generation of EVs?\" srcset=\"https://www.powerelectronicsnews.com/wp-content/uploads/sites/3/2024/11/EV-charging.png?w=1000 1000w, https://www.powerelectronicsnews.com/wp-content/uploads/sites/3/2024/11/EV-charging.png?w=500 500w, https://www.powerelectronicsnews.com/wp-content/uploads/sites/3/2024/11/EV-charging.png?w=768 768w, https://www.powerelectronicsnews.com/wp-content/uploads/sites/3/2024/11/EV-charging.png?w=675 675w\" class=\"webfeedsFeaturedVisual wp-post-image\" height=\"668\"><p>Experts believe ultracapacitors are the solution for mitigating the negatives of modern batteries, like life cycles and charging speeds. How true is this?</p>\n<p>The post <a href=\"https://www.powerelectronicsnews.com/can-ultracapacitors-power-the-next-generation-of-evs/\">Can Ultracapacitors Power the Next Generation of EVs?</a> appeared first on <a href=\"https://www.powerelectronicsnews.com\">Power Electronics News</a>.</p>",
+      "direction": "ltr"
+    },
+    "alternate": [
+      {
+        "href": "https://www.powerelectronicsnews.com/can-ultracapacitors-power-the-next-generation-of-evs/",
+        "type": "text/html"
+      }
+    ],
+    "unread": false,
+    "readTime": 0,
+    "categories": [
+      {
+        "id": "user/558f1c2c-49b5-4ce9-a50d-3612797794d0/category/f295ac7e-8acf-4be5-ad21-0d0d89225139",
+        "label": "electronics"
+      }
+    ],
+    "tags": [
+      {
+        "id": "user/558f1c2c-49b5-4ce9-a50d-3612797794d0/tag/global.read",
+        "label": ""
+      },
+      {
+        "id": "user/558f1c2c-49b5-4ce9-a50d-3612797794d0/tag/global.saved",
+        "label": "Saved For Later"
+      }
+    ],
+    "actionTimestamp": 1737433843870,
+    "engagement": 2,
+    "engagementRate": 1
+  },
+  {
+    "fingerprint": "a51653aa",
+    "id": "RSro06E2HNBRITkWEUlhlAJ0aOG51iNjwBh4qIbBnd0=_194849079c8:1a95a82:c32197dc",
+    "language": "en",
+    "originId": "1851743114",
+    "keywords": [
+      "brighton and rottingdean seashore electric railway",
+      "magnus volk",
+      "volk",
+      "stilts",
+      "rail transport",
+      "hospitality recreation",
+      "transport in brighton and hove",
+      "brighton",
+      "daddy longlegs",
+      "amphibious vehicle"
+    ],
+    "thumbnail": [
+      {
+        "url": "https://i.kinja-img.com/image/upload/c_fit,q_80,w_636/03a834e643e27d5a5b8445f0d4bea85d.png"
+      }
+    ],
+    "origin": {
+      "streamId": "feed/http://www.jalopnik.com/index.xml",
+      "title": "Jalopnik",
+      "htmlUrl": "https://jalopnik.com"
+    },
+    "title": "The Daddy Long Legs Was A Wild High-Rise Train Equipped With Life Boats",
+    "published": 1737390600000,
+    "crawled": 1737390848456,
+    "author": "Owen Bellwood",
+    "summary": {
+      "content": "<img src=\"https://i.kinja-img.com/image/upload/c_fit,q_80,w_636/03a834e643e27d5a5b8445f0d4bea85d.png\"><p>A lot of pretty strange means of getting around have been invented over the years, with <a href=\"https://jalopnik.com/i-love-pretty-much-everything-about-this-old-guy-and-hi-1822411249\">things like the steam-powered car</a>, the hoverboard and <a href=\"https://jalopnik.com/replace-your-house-boat-and-bike-with-this-amphibious-1848602256\">amphibious bus all once promising</a> to be the future of transport. They could all be beaten to the title of strangest means of getting from A to B by this elevated railway,…</p><p><a href=\"https://jalopnik.com/the-daddy-long-legs-was-a-wild-high-rise-train-equipped-1851743114\">Read more...</a></p>",
+      "direction": "ltr"
+    },
+    "alternate": [
+      {
+        "href": "https://jalopnik.com/the-daddy-long-legs-was-a-wild-high-rise-train-equipped-1851743114",
+        "type": "text/html"
+      }
+    ],
+    "visual": {
+      "width": 1200,
+      "contentType": "image/png",
+      "url": "https://i.kinja-img.com/image/upload/c_fill,h_675,pg_1,q_80,w_1200/03a834e643e27d5a5b8445f0d4bea85d.png",
+      "processor": "feedly-nikon-v3.1",
+      "height": 675,
+      "expirationDate": 1739982855770,
+      "edgeCacheUrl": "https://lh3.googleusercontent.com/6ra7D2mmI3HBQiP_bX_-H4FlWfZjSGWzrM29KvEvGFeRZ9wXPgXKUSGPfoILsAb03jQNl3nSz7yJlfWB4-yPt_gmvYzlmv9JAsSXIS0"
+    },
+    "canonicalUrl": "https://jalopnik.com/the-daddy-long-legs-was-a-wild-high-rise-train-equipped-1851743114",
+    "unread": false,
+    "readTime": 0,
+    "categories": [
+      {
+        "id": "user/558f1c2c-49b5-4ce9-a50d-3612797794d0/category/cars",
+        "label": "cars"
+      }
+    ],
+    "tags": [
+      {
+        "id": "user/558f1c2c-49b5-4ce9-a50d-3612797794d0/tag/global.read",
+        "label": ""
+      },
+      {
+        "id": "user/558f1c2c-49b5-4ce9-a50d-3612797794d0/tag/global.saved",
+        "label": "Saved For Later"
+      }
+    ],
+    "actionTimestamp": 1737421103055,
+    "engagement": 985,
+    "engagementRate": 6.04
+  }
+]
