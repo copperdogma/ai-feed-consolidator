@@ -3,7 +3,7 @@
 20240119: Created by Cam Marsollier with Claude 3.5 Sonnet
 
 ## Current Task
-Implementing content normalization for feed items
+Implementing text summarization pipeline
 
 ## Active Tasks
 
@@ -29,9 +29,16 @@ Implementing content normalization for feed items
 
 ### Content Processing
 - [x] Design content extraction rules
+- [x] Extract key points
 - [ ] Create text summarization
-- [ ] Extract key points
 - [ ] Handle different content types (articles, videos, etc)
+
+### OpenAI Integration
+- [x] Configure API key management
+- [x] Create key points extraction prompts
+- [ ] Create summary generation prompts
+- [x] Build local caching system
+- [x] Set up cost monitoring
 
 ### Testing
 - [x] Set up test fixtures with sample data

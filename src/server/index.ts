@@ -11,6 +11,8 @@ import { logger } from './logger';
 import { IncomingMessage, ServerResponse } from 'http';
 import { createWriteStream } from 'fs';
 import { multistream } from 'pino-multi-stream';
+import authRoutes from './routes/auth';
+import feedRoutes from './routes/feed';
 
 const app = express();
 
@@ -110,6 +112,10 @@ app.use((err: Error, req: Request, res: Response, next: Function) => {
   logger.error({ err, req: { method: req.method, url: req.url } }, 'Unhandled error');
   res.status(500).json({ error: 'Internal server error' });
 });
+
+// Add feed routes
+app.use('/api/auth', authRoutes);
+app.use('/api/feed', feedRoutes);
 
 // Start server with error handling
 const server = app.listen(config.port)

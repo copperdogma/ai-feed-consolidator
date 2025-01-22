@@ -1,5 +1,6 @@
 import { config } from '../config';
 import axios, { AxiosError } from 'axios';
+import { RateLimiter } from './rate-limiter';
 
 export class FeedlyError extends Error {
   constructor(
@@ -84,6 +85,7 @@ const DEFAULT_RETRY_OPTIONS = {
 
 export class FeedlyService {
   private config: FeedlyConfig;
+  private rateLimiter: RateLimiter;
 
   constructor() {
     if (!config.feedly?.auth) {
@@ -94,6 +96,14 @@ export class FeedlyService {
       auth: config.feedly.auth,
       baseUrl: 'https://cloud.feedly.com/v3',
     };
+
+    // Initialize rate limiter with Feedly's limits
+    // Default to 250 requests per 15 minutes
+    this.rateLimiter = new RateLimiter({
+      tokensPerInterval: 250,
+      intervalMs: 15 * 60 * 1000, // 15 minutes
+      maxTokens: 250
+    });
   }
 
   /**
@@ -103,6 +113,9 @@ export class FeedlyService {
    */
   async getSavedItems(count = 20): Promise<FeedlyEntry[]> {
     return this.withRetry(async () => {
+      // Wait for rate limit token
+      await this.rateLimiter.consume();
+
       try {
         const streamResponse = await axios.get<FeedlyEntries>(
           `${this.config.baseUrl}/streams/contents`,

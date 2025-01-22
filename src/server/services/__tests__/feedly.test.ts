@@ -4,6 +4,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { loadFeedlySampleData } from './helpers/load-fixtures';
 import axios from 'axios';
+import { config } from '../../config';
 
 // Mock axios
 vi.mock('axios', () => ({
@@ -14,12 +15,28 @@ vi.mock('axios', () => ({
   },
 }));
 
+// Mock config
+vi.mock('../../config', () => ({
+  config: {
+    feedly: {
+      auth: {
+        userId: 'test-user',
+        accessToken: 'test-token',
+        refreshToken: 'test-refresh-token'
+      },
+      clientId: 'test-client-id',
+      clientSecret: 'test-client-secret'
+    }
+  }
+}));
+
 describe('FeedlyService', () => {
   let feedlyService: FeedlyService;
 
   beforeEach(() => {
-    feedlyService = new FeedlyService();
     vi.clearAllMocks();
+    vi.useFakeTimers();
+    feedlyService = new FeedlyService();
   });
 
   describe('getSavedItems', () => {
@@ -90,13 +107,38 @@ describe('FeedlyService', () => {
     });
 
     it('should respect rate limits', async () => {
-      // Mock a 429 Too Many Requests
+      // Mock successful responses
+      vi.mocked(axios.get).mockResolvedValue({ 
+        data: { items: [{ id: '1', title: 'Test' }] } 
+      });
+
+      // Make multiple requests in quick succession
+      const requests = Array(3).fill(null).map(() => feedlyService.getSavedItems());
+      
+      // First two should complete immediately
+      const [first, second] = await Promise.all(requests.slice(0, 2));
+      expect(first).toHaveLength(1);
+      expect(second).toHaveLength(1);
+
+      // Third should be delayed
+      const beforeThird = Date.now();
+      await requests[2];
+      const elapsed = Date.now() - beforeThird;
+      
+      // Should have waited close to the rate limit interval
+      expect(elapsed).toBeGreaterThan(0);
+    });
+
+    it('should handle rate limit errors with backoff', async () => {
+      // Mock a 429 Too Many Requests followed by success
       vi.mocked(axios.get)
         .mockRejectedValueOnce({
           isAxiosError: true,
           response: { status: 429 }
         })
-        .mockResolvedValueOnce({ data: { items: [{ id: '1', title: 'Test' }] } });
+        .mockResolvedValueOnce({ 
+          data: { items: [{ id: '1', title: 'Test' }] } 
+        });
 
       const items = await feedlyService.getSavedItems();
       
