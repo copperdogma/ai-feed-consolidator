@@ -3,7 +3,7 @@
 20240119: Created by Cam Marsollier with Claude 3.5 Sonnet
 
 ## Current Task
-Implementing UI enhancements and optimizing content processing
+Optimizing performance and user experience
 
 ## Active Tasks
 
@@ -53,20 +53,17 @@ Implementing UI enhancements and optimizing content processing
   - [ ] Consider moving to a separate test suite that runs less frequently
 
 ### UI Enhancements
-- [ ] Add sorting options for feed items
-  - [ ] Sort by date
-  - [ ] Sort by reading time
-  - [ ] Sort by content type
-- [ ] Implement infinite scroll or pagination
-- [ ] Add loading indicators for content processing
+- [ ] Add sorting options (by date, reading time, source)
+- [ ] Implement infinite scroll
+- [ ] Add loading indicators for feed items
 - [ ] Add visual cues for time-sensitive content
-- [ ] Improve mobile responsiveness
+- [ ] Add search functionality
+- [ ] Implement dark mode support
 
 ### Performance Optimization
-- [ ] Implement background processing for feed items
-- [ ] Add caching for processed content
-- [ ] Optimize OpenAI token usage
-- [ ] Add request batching for feed processing
+- [ ] Process more than 5 items at a time
+- [ ] Add caching for processed items
+- [ ] Implement background processing for new items
 
 ## Next Steps
 1. Implement UI enhancements for better user experience
@@ -78,6 +75,14 @@ Implementing UI enhancements and optimizing content processing
 - [x] Basic Feedly API integration
 - [x] Authentication flow
 - [x] Sample data collection
+- [x] Create media type icon with integrated consumption time
+- [x] Remove redundant "Summary:" prefix
+- [x] Display hero image thumbnail
+- [x] Left-align content and optimize vertical height
+- [x] Improve chip layout and wrapping behavior
+- [x] Enhance visual hierarchy with title placement
+- [x] Streamline card design with subtle separators
+- [x] Optimize mobile responsiveness
 
 ## Future Tasks
 - [ ] Add support for additional feed sources
