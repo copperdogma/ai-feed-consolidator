@@ -1,165 +1,158 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ContentProcessor, ContentProcessingError } from '../content-processor';
-import { OpenAIService } from '../openai';
+import { OpenAIService, SummaryResponse } from '../openai';
 import { FeedItem } from '../../types/feed';
 
-// Mock OpenAI service
-vi.mock('../openai', () => ({
-  OpenAIService: vi.fn().mockImplementation(() => ({
-    extractCorePoints: vi.fn().mockResolvedValue([
-      'Key point 1',
-      'Key point 2'
-    ])
-  }))
-}));
-
 describe('ContentProcessor', () => {
-  let contentProcessor: ContentProcessor;
-  let openai: OpenAIService;
+  const mockOpenAI = {
+    createSummary: vi.fn()
+  };
+
+  const processor = new ContentProcessor(vi.mocked(mockOpenAI) as unknown as OpenAIService);
+
+  const mockFeedItem: FeedItem = {
+    id: '1',
+    sourceId: 'source1',
+    externalId: 'ext1',
+    url: 'https://example.com',
+    title: 'Test Article',
+    content: 'This is a test article with some content.',
+    publishedAt: new Date(),
+    source: {
+      id: 'source1',
+      name: 'Test Source',
+      url: 'https://example.com',
+      platform: 'test'
+    }
+  };
 
   beforeEach(() => {
-    openai = new OpenAIService();
-    contentProcessor = new ContentProcessor(openai);
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2025-01-23T05:45:29.057Z'));
   });
 
-  describe('processFeedItem', () => {
-    it('should process item with full content', async () => {
-      const item: FeedItem = {
-        id: '1',
-        sourceId: 'test',
-        externalId: 'ext1',
-        url: 'https://example.com',
-        title: 'Test Article',
-        content: 'This is the main content of the article.',
-        publishedAt: new Date(),
-        source: {
-          id: 'src1',
-          name: 'Test Source',
-          url: 'https://example.com',
-          platform: 'test'
-        }
-      };
+  it('should process a feed item with content', async () => {
+    const summaryResponse: SummaryResponse = {
+      summary: 'A concise test article summary.',
+      content_type: 'technical',
+      time_sensitive: false,
+      requires_background: [],
+      consumption_time: {
+        minutes: 2,
+        type: 'read'
+      }
+    };
 
-      const result = await contentProcessor.processFeedItem(item);
+    mockOpenAI.createSummary.mockResolvedValueOnce(summaryResponse);
 
-      expect(result.keyPoints).toHaveLength(2);
-      expect(result.readingTimeMinutes).toBeGreaterThan(0);
-      expect(openai.extractCorePoints).toHaveBeenCalledWith(item.content);
+    const result = await processor.processFeedItem(mockFeedItem);
+
+    expect(result).toEqual({
+      ...mockFeedItem,
+      ...summaryResponse,
+      processedAt: new Date('2025-01-23T05:45:29.057Z')
     });
 
-    it('should fall back to summary when content is empty', async () => {
-      const item: FeedItem = {
-        id: '1',
-        sourceId: 'test',
-        externalId: 'ext1',
-        url: 'https://example.com',
-        title: 'Test Article',
-        content: '', // Empty content
-        summary: 'This is the article summary.',
-        publishedAt: new Date(),
-        source: {
-          id: 'src1',
-          name: 'Test Source',
-          url: 'https://example.com',
-          platform: 'test'
+    expect(mockOpenAI.createSummary).toHaveBeenCalledWith(
+      'This is a test article with some content.'
+    );
+  });
+
+  it('should process a feed item with YouTube content', async () => {
+    const youtubeItem: FeedItem = {
+      ...mockFeedItem,
+      metadata: {
+        youtube: {
+          duration: 'PT15M30S'
         }
-      };
+      }
+    };
 
-      const result = await contentProcessor.processFeedItem(item);
+    const summaryResponse: SummaryResponse = {
+      summary: 'A summary of the video content.',
+      content_type: 'entertainment',
+      time_sensitive: false,
+      requires_background: ['Some context needed'],
+      consumption_time: {
+        minutes: 16,
+        type: 'watch'
+      }
+    };
 
-      expect(result.keyPoints).toHaveLength(2);
-      expect(openai.extractCorePoints).toHaveBeenCalledWith(item.summary);
+    mockOpenAI.createSummary.mockResolvedValueOnce(summaryResponse);
+
+    const result = await processor.processFeedItem(youtubeItem);
+
+    expect(result).toEqual({
+      ...youtubeItem,
+      ...summaryResponse,
+      processedAt: new Date('2025-01-23T05:45:29.057Z')
     });
+  });
 
-    it('should fall back to title when content is empty and no summary', async () => {
-      const item: FeedItem = {
-        id: '1',
-        sourceId: 'test',
-        externalId: 'ext1',
+  it('should fall back to summary if content is not available', async () => {
+    const itemWithoutContent: FeedItem = {
+      ...mockFeedItem,
+      content: '',
+      summary: 'A brief summary of the content.'
+    };
+
+    const summaryResponse: SummaryResponse = {
+      summary: 'Processed summary.',
+      content_type: 'news',
+      time_sensitive: true,
+      requires_background: [],
+      consumption_time: {
+        minutes: 1,
+        type: 'read'
+      }
+    };
+
+    mockOpenAI.createSummary.mockResolvedValueOnce(summaryResponse);
+
+    const result = await processor.processFeedItem(itemWithoutContent);
+
+    expect(result).toEqual({
+      ...itemWithoutContent,
+      ...summaryResponse,
+      processedAt: new Date('2025-01-23T05:45:29.057Z')
+    });
+    expect(mockOpenAI.createSummary).toHaveBeenCalledWith('A brief summary of the content.');
+  });
+
+  it('should throw error if no content is available', async () => {
+    const emptyItem: FeedItem = {
+      id: 'test-id',
+      sourceId: 'test-source-id',
+      externalId: 'test-external-id',
+      url: 'https://example.com',
+      title: '',
+      content: '',
+      summary: '',
+      publishedAt: new Date(),
+      source: {
+        id: 'test-source',
+        name: 'Test Source',
         url: 'https://example.com',
-        title: 'Test Article',
-        content: '', // Empty content
-        publishedAt: new Date(),
-        source: {
-          id: 'src1',
-          name: 'Test Source',
-          url: 'https://example.com',
-          platform: 'test'
-        }
-      };
+        platform: 'feedly'
+      }
+    };
 
-      const result = await contentProcessor.processFeedItem(item);
+    await expect(processor.processFeedItem(emptyItem)).rejects.toThrow(
+      new ContentProcessingError('No content available for processing')
+    );
+  });
 
-      expect(result.keyPoints).toHaveLength(2);
-      expect(openai.extractCorePoints).toHaveBeenCalledWith(item.title);
-    });
+  it('should handle OpenAI errors gracefully', async () => {
+    mockOpenAI.createSummary.mockRejectedValueOnce(new Error('OpenAI API error'));
 
-    it('should throw error when no content is available', async () => {
-      const item: FeedItem = {
-        id: '1',
-        sourceId: 'test',
-        externalId: 'ext1',
-        url: 'https://example.com',
-        title: '', // Empty title
-        content: '', // Empty content
-        publishedAt: new Date(),
-        source: {
-          id: 'src1',
-          name: 'Test Source',
-          url: 'https://example.com',
-          platform: 'test'
-        }
-      };
+    await expect(processor.processFeedItem(mockFeedItem)).rejects.toThrow(
+      new ContentProcessingError('Failed to process feed item')
+    );
+  });
 
-      await expect(contentProcessor.processFeedItem(item))
-        .rejects
-        .toThrow(ContentProcessingError);
-    });
-
-    it('should clean HTML content', async () => {
-      const item: FeedItem = {
-        id: '1',
-        sourceId: 'test',
-        externalId: 'ext1',
-        url: 'https://example.com',
-        title: 'Test Article',
-        content: '<p>This is <b>formatted</b> content.</p>',
-        publishedAt: new Date(),
-        source: {
-          id: 'src1',
-          name: 'Test Source',
-          url: 'https://example.com',
-          platform: 'test'
-        }
-      };
-
-      const result = await contentProcessor.processFeedItem(item);
-
-      expect(openai.extractCorePoints).toHaveBeenCalledWith('This is formatted content.');
-    });
-
-    it('should handle OpenAI errors gracefully', async () => {
-      vi.mocked(openai.extractCorePoints).mockRejectedValueOnce(new Error('OpenAI error'));
-
-      const item: FeedItem = {
-        id: '1',
-        sourceId: 'test',
-        externalId: 'ext1',
-        url: 'https://example.com',
-        title: 'Test Article',
-        content: 'Test content',
-        publishedAt: new Date(),
-        source: {
-          id: 'src1',
-          name: 'Test Source',
-          url: 'https://example.com',
-          platform: 'test'
-        }
-      };
-
-      await expect(contentProcessor.processFeedItem(item))
-        .rejects
-        .toThrow(ContentProcessingError);
-    });
+  afterEach(() => {
+    vi.useRealTimers();
   });
 }); 

@@ -25,6 +25,13 @@ export interface FeedMedia {
 }
 
 /**
+ * YouTube-specific metadata
+ */
+export interface YouTubeMetadata {
+  duration: string;
+}
+
+/**
  * Common interface for feed items from any source
  */
 export interface FeedItem {
@@ -49,7 +56,21 @@ export interface FeedItem {
     shares?: number;
     comments?: number;
   };
-  metadata?: Record<string, unknown>; // Additional platform-specific data
+  metadata?: {                  // Additional platform-specific data
+    youtube?: YouTubeMetadata;
+    language: string;
+    readTime: number;
+    fingerprint: string;
+    categories: Array<{
+      id: string;
+      label: string;
+    }>;
+    tags: Array<{
+      id: string;
+      label: string;
+    }>;
+  };
+  readingTime?: number;         // Estimated reading time in minutes
 }
 
 /**
@@ -57,9 +78,12 @@ export interface FeedItem {
  */
 export interface ProcessedFeedItem extends FeedItem {
   processedAt: Date;            // When the item was processed
-  keyPoints?: string[];         // Extracted key points
-  summary?: string;             // Generated summary
-  topics?: string[];            // Detected/assigned topics
-  sentiment?: number;           // Sentiment score (-1 to 1)
-  readingTime?: number;         // Estimated reading time in minutes
+  content_type: 'technical' | 'news' | 'analysis' | 'tutorial' | 'entertainment';  // Type of content
+  time_sensitive: boolean;      // Whether the content is time-sensitive
+  requires_background: string[]; // Required background knowledge
+  consumption_time: {           // Time to consume the content
+    minutes: number;            // Duration in minutes
+    type: 'read' | 'watch' | 'listen';  // Type of consumption
+  };
+  summary: string;             // Generated summary
 } 

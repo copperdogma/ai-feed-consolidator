@@ -17,12 +17,7 @@ router.get('/items', async (req, res) => {
     const processedItems = await Promise.all(
       feedlyItems.slice(0, 5).map(async feedlyItem => {
         const item = FeedlyNormalizer.normalize(feedlyItem);
-        const processed = await contentProcessor.processFeedItem(item);
-        return {
-          ...item,
-          ...processed,
-          processedAt: new Date()
-        };
+        return await contentProcessor.processFeedItem(item);
       })
     );
 

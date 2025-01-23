@@ -1,11 +1,22 @@
-import OpenAI from 'openai';
+import { OpenAI } from 'openai';
 import { config } from '../config';
 
 export class OpenAIError extends Error {
-  constructor(message: string, public readonly cause?: unknown) {
+  constructor(message: string) {
     super(message);
     this.name = 'OpenAIError';
   }
+}
+
+export interface SummaryResponse {
+  summary: string;
+  content_type: 'technical' | 'news' | 'analysis' | 'tutorial' | 'entertainment';
+  time_sensitive: boolean;
+  requires_background: string[];
+  consumption_time: {
+    minutes: number;
+    type: 'read' | 'watch' | 'listen';
+  };
 }
 
 export class OpenAIService {
@@ -18,74 +29,71 @@ export class OpenAIService {
 
     this.client = new OpenAI({
       apiKey: config.openai.apiKey,
-      dangerouslyAllowBrowser: true // Required for testing with JSDOM
+      dangerouslyAllowBrowser: process.env.NODE_ENV === 'test' // Allow browser environment in tests
     });
   }
 
-  /**
-   * Extracts core points from the given text content
-   * @param content The text content to analyze
-   * @returns Array of core points extracted from the content
-   */
-  async extractCorePoints(content: string): Promise<string[]> {
-    if (!content.trim()) {
-      throw new OpenAIError('Content cannot be empty');
+  async createSummary(content: string): Promise<SummaryResponse> {
+    if (!content) {
+      throw new OpenAIError('No content provided');
     }
 
     try {
       const completion = await this.client.chat.completions.create({
-        model: 'gpt-3.5-turbo',
+        model: 'gpt-4-turbo-preview',
         messages: [
           {
             role: 'system',
-            content: `You are a precise content analyzer that extracts key points from text.
-Your task is to identify 3-5 main points that capture the core message.
+            content: `You are a precise content analyzer that creates concise, informative summaries.
 
 Guidelines:
-- Focus on factual information and main insights
-- Make each point clear and self-contained
-- Keep points concise (10-15 words each)
-- Avoid repetition and background information
-- Use simple, direct language
-- Number points for clarity
+1. Provide a 1-3 sentence summary that captures the essential information. Each sentence should be concise and focused.
+2. Identify the content type (technical, news, analysis, tutorial, entertainment)
+3. Determine if the content is time-sensitive (e.g. breaking news, price changes, product launches)
+4. List required background knowledge as fundamental concepts (e.g. "machine learning" instead of "AI", "electric vehicles" instead of "EV market trends")
+5. Estimate consumption time in minutes based on content length and complexity
 
-Format: "N. [Key point]"
+Output Format:
+{
+  "summary": "Concise summary of the main points (max 3 sentences)",
+  "content_type": "technical|news|analysis|tutorial|entertainment",
+  "time_sensitive": true|false,
+  "requires_background": ["fundamental concept 1", "fundamental concept 2"],
+  "consumption_time": {
+    "minutes": number,
+    "type": "read|watch|listen"
+  }
+}
 
-Example:
-1. New electric car model achieves 400-mile range on single charge
-2. Manufacturing costs reduced 30% through automated assembly line
-3. Pre-orders start next month with base price of $35,000`
+Remember:
+- Keep summaries under 3 sentences
+- Use fundamental concepts for background knowledge
+- Be specific with technical terms (e.g. "machine learning" not "AI")`
           },
           {
             role: 'user',
-            content: content,
-          },
+            content
+          }
         ],
-        temperature: 0.3, // Keep low temperature for consistent output
-        max_tokens: 256, // Reduced from 500 since we need less with GPT-3.5
-        presence_penalty: 0.1, // Slight penalty to prevent repetition
-        frequency_penalty: 0.1, // Slight penalty to encourage diverse points
+        temperature: 0.3,
+        max_tokens: 500
       });
 
-      const result = completion.choices[0]?.message?.content;
-      if (!result) {
-        throw new OpenAIError('No response received from OpenAI');
+      const responseContent = completion.choices[0]?.message?.content;
+      if (!responseContent) {
+        throw new OpenAIError('No response from OpenAI');
       }
 
-      // Split the response into individual points and clean them up
-      return result
-        .split('\n')
-        .map(line => line.trim())
-        .filter(line => line.length > 0)
-        .map(line => {
-          // Remove the number prefix (e.g., "1. " or "1) ")
-          return line.replace(/^\d+[\.\)]?\s*/, '').trim();
-        });
-    } catch (error) {
-      if (error instanceof Error) {
-        throw new OpenAIError('Failed to extract core points', error);
+      try {
+        return JSON.parse(responseContent) as SummaryResponse;
+      } catch (err) {
+        throw new OpenAIError('Failed to parse OpenAI response as JSON');
       }
-      throw new OpenAIError('An unknown error occurred while extracting core points');
+    } catch (err) {
+      if (err instanceof OpenAIError) {
+        throw err;
+      }
+      throw new OpenAIError(`OpenAI API error: ${err}`);
     }
   }
 } 

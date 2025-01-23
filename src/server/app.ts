@@ -2,6 +2,7 @@ import express, { Express, Request, Response, NextFunction, RequestHandler } fro
 import session from 'express-session';
 import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
+import cors from 'cors';
 import { pool, User } from './services/db';
 import { UserService } from './services/user';
 import { LoginHistoryService } from './services/login-history';
@@ -36,6 +37,12 @@ export function createApp(): Express {
 
   // Middleware
   app.use(express.json());
+  
+  // Configure CORS
+  app.use(cors({
+    origin: 'http://localhost:5173', // Vite dev server default port
+    credentials: true
+  }));
   
   // Configure session middleware
   app.use(session({
@@ -204,17 +211,19 @@ export function createApp(): Express {
     // Record login attempt
     try {
       const user = req.user as User | undefined;
-      await LoginHistoryService.recordLoginAttempt({
-        userId: user?.id || null,
-        success: !!user,
-        ipAddress: req.ip || req.socket.remoteAddress || '',
-        userAgent: req.get('user-agent') || '',
-        loginTime: new Date(),
-        requestPath: req.path,
-        failureReason: user ? undefined : 'Not authenticated'
-      });
+      const userId = user?.id;
+      if (userId) {
+        await LoginHistoryService.recordLoginAttempt({
+          userId,
+          success: true,
+          ipAddress: req.ip || req.socket.remoteAddress || '',
+          userAgent: req.get('user-agent') || '',
+          loginTime: new Date(),
+          requestPath: req.path,
+        });
+      }
     } catch (error) {
-      console.error('Failed to record login attempt:', error);
+      console.error('Error recording login attempt:', error);
       // Don't fail the request just because we couldn't record it
     }
 

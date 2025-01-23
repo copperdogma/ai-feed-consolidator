@@ -50,12 +50,12 @@ Source: ${item.source.name} (${item.source.platform})`;
         
         <Box sx={{ mb: 2 }}>
           <Chip 
-            label={`${item.readingTime || 0} min read`} 
+            label={`${item.consumption_time?.minutes || 0} min ${item.consumption_time?.type || 'read'}`} 
             size="small" 
             sx={{ mr: 1 }} 
           />
           <Chip 
-            label={item.source.platform} 
+            label={item.content_type} 
             size="small" 
             sx={{ mr: 1 }} 
           />
@@ -66,7 +66,7 @@ Source: ${item.source.name} (${item.source.platform})`;
             color="primary"
             variant="outlined"
           />
-          {item.topics?.map(topic => (
+          {item.requires_background?.map(topic => (
             <Chip 
               key={topic} 
               label={topic} 
@@ -76,18 +76,14 @@ Source: ${item.source.name} (${item.source.platform})`;
           ))}
         </Box>
 
-        {item.keyPoints && item.keyPoints.length > 0 && (
+        {item.summary && (
           <>
             <Typography variant="subtitle1" sx={{ mb: 1 }}>
-              Key Points:
+              Summary:
             </Typography>
-            <List dense>
-              {item.keyPoints.map((point, index) => (
-                <ListItem key={index}>
-                  <ListItemText primary={point} />
-                </ListItem>
-              ))}
-            </List>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              {item.summary}
+            </Typography>
           </>
         )}
       </CardContent>

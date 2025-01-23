@@ -3,7 +3,7 @@
 20240119: Created by Cam Marsollier with Claude 3.5 Sonnet
 
 ## Current Task
-Implementing text summarization pipeline
+Implementing UI enhancements and optimizing content processing
 
 ## Active Tasks
 
@@ -30,13 +30,13 @@ Implementing text summarization pipeline
 ### Content Processing
 - [x] Design content extraction rules
 - [x] Extract key points
-- [ ] Create text summarization
-- [ ] Handle different content types (articles, videos, etc)
+- [x] Create text summarization
+- [x] Handle different content types (articles, videos, etc)
 
 ### OpenAI Integration
 - [x] Configure API key management
 - [x] Create key points extraction prompts
-- [ ] Create summary generation prompts
+- [x] Create summary generation prompts
 - [x] Build local caching system
 - [x] Set up cost monitoring
 
@@ -46,11 +46,32 @@ Implementing text summarization pipeline
 - [x] Add integration tests for normalizer
 - [x] Add unit tests for normalizer
 - [x] Test error cases
+- [ ] Improve OpenAI quality tests to handle stochastic responses
+  - [ ] Run each test multiple times (e.g. 20x) to ensure statistical accuracy
+  - [ ] Consider acceptable ranges/categories for responses rather than exact matches
+  - [ ] Track success rates and only fail if error rate exceeds threshold
+  - [ ] Consider moving to a separate test suite that runs less frequently
+
+### UI Enhancements
+- [ ] Add sorting options for feed items
+  - [ ] Sort by date
+  - [ ] Sort by reading time
+  - [ ] Sort by content type
+- [ ] Implement infinite scroll or pagination
+- [ ] Add loading indicators for content processing
+- [ ] Add visual cues for time-sensitive content
+- [ ] Improve mobile responsiveness
+
+### Performance Optimization
+- [ ] Implement background processing for feed items
+- [ ] Add caching for processed content
+- [ ] Optimize OpenAI token usage
+- [ ] Add request batching for feed processing
 
 ## Next Steps
-1. Implement OpenAI integration for key points extraction
-2. Add rate limiting to prevent API abuse
-3. Create text summarization pipeline
+1. Implement UI enhancements for better user experience
+2. Add performance optimizations for content processing
+3. Improve testing infrastructure for better reliability
 
 ## Completed
 - [x] Initial project setup

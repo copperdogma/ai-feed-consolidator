@@ -230,6 +230,7 @@ export class FeedlyService {
   ): Promise<T> {
     let lastError: Error | undefined;
     let delay = options.initialDelayMs;
+    let hasRefreshedToken = false;
 
     for (let attempt = 1; attempt <= options.maxRetries; attempt++) {
       try {
@@ -243,44 +244,43 @@ export class FeedlyService {
         }
 
         // On auth error, try to refresh token once
-        if (error instanceof FeedlyError && 
+        if (!hasRefreshedToken && 
+            error instanceof FeedlyError && 
             axios.isAxiosError(error.cause) && 
             error.cause.response?.status === 401) {
           try {
             await this.refreshAccessToken();
+            hasRefreshedToken = true;
             continue; // Retry immediately with new token
           } catch (refreshError) {
-            throw refreshError; // If refresh fails, stop retrying
+            throw refreshError; // If refresh fails, propagate the error
           }
         }
 
-        // If this was the last attempt, throw the error
-        if (attempt === options.maxRetries) {
-          throw lastError;
-        }
-
-        // For rate limit errors, use the delay from the response headers if available
+        // For rate limit errors, use the retry-after header if available
         if (error instanceof FeedlyError && 
             axios.isAxiosError(error.cause) && 
             error.cause.response?.status === 429) {
           const retryAfter = error.cause.response?.headers?.['retry-after'];
           if (retryAfter) {
-            const retryDelayMs = parseInt(retryAfter, 10) * 1000;
-            if (!isNaN(retryDelayMs)) {
-              delay = retryDelayMs;
-            }
+            delay = parseInt(retryAfter, 10) * 1000;
           }
         }
 
-        // Implement exponential backoff with jitter
+        // On last attempt, throw the error
+        if (attempt === options.maxRetries) {
+          throw lastError;
+        }
+
+        // Add jitter to prevent thundering herd
         const jitter = Math.random() * 0.3 + 0.85; // Random between 0.85 and 1.15
-        delay = Math.min(delay * 2 * jitter, options.maxDelayMs);
+        await new Promise(resolve => setTimeout(resolve, delay * jitter));
         
-        // Wait before the next retry
-        await new Promise(resolve => setTimeout(resolve, delay));
+        // Exponential backoff
+        delay = Math.min(delay * 2, options.maxDelayMs);
       }
     }
 
-    throw lastError; // This should never be reached due to the for loop logic
+    throw lastError; // This should never be reached due to the loop logic
   }
 } 
