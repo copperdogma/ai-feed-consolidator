@@ -61,9 +61,13 @@ describe('FeedlyService', () => {
           isAxiosError: true,
           response: { status: 500 }
         })
-        .mockResolvedValueOnce({ data: { items: [{ id: '1', title: 'Test' }] } });
+        .mockResolvedValueOnce({ 
+          data: { items: [{ id: '1', title: 'Test' }] } 
+        });
 
-      const items = await feedlyService.getSavedItems();
+      const promise = feedlyService.getSavedItems();
+      await vi.advanceTimersByTimeAsync(2000); // Advance past the initial delay
+      const items = await promise;
       
       expect(items).toHaveLength(1);
       expect(axios.get).toHaveBeenCalledTimes(2);
@@ -76,22 +80,36 @@ describe('FeedlyService', () => {
           isAxiosError: true,
           response: { status: 401 }
         })
-        .mockResolvedValueOnce({ data: { items: [{ id: '1', title: 'Test' }] } });
+        .mockResolvedValueOnce({ 
+          data: { items: [{ id: '1', title: 'Test' }] } 
+        });
 
       vi.mocked(axios.post).mockResolvedValueOnce({ 
         data: { access_token: 'new_token' } 
       });
 
-      const items = await feedlyService.getSavedItems();
+      const promise = feedlyService.getSavedItems();
+      await vi.advanceTimersByTimeAsync(2000); // Advance past any potential delays
+      const items = await promise;
       
       expect(items).toHaveLength(1);
       expect(axios.post).toHaveBeenCalledTimes(1);
       expect(axios.get).toHaveBeenCalledTimes(2);
+      
+      // Verify the second call used the new token
+      expect(axios.get).toHaveBeenLastCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            'Authorization': 'Bearer new_token'
+          })
+        })
+      );
     });
 
     it('should not retry on permanent failures', async () => {
-      // Mock a 400 Bad Request
-      vi.mocked(axios.get).mockRejectedValue({
+      // Mock a 400 Bad Request with error message
+      vi.mocked(axios.get).mockRejectedValueOnce({
         isAxiosError: true,
         response: { 
           status: 400,
@@ -122,6 +140,7 @@ describe('FeedlyService', () => {
 
       // Third should be delayed
       const beforeThird = Date.now();
+      await vi.advanceTimersByTimeAsync(1000); // Advance time to allow rate limit to reset
       await requests[2];
       const elapsed = Date.now() - beforeThird;
       
@@ -134,13 +153,18 @@ describe('FeedlyService', () => {
       vi.mocked(axios.get)
         .mockRejectedValueOnce({
           isAxiosError: true,
-          response: { status: 429 }
+          response: { 
+            status: 429,
+            headers: { 'retry-after': '2' } // 2 seconds
+          }
         })
         .mockResolvedValueOnce({ 
           data: { items: [{ id: '1', title: 'Test' }] } 
         });
 
-      const items = await feedlyService.getSavedItems();
+      const promise = feedlyService.getSavedItems();
+      await vi.advanceTimersByTimeAsync(3000); // Advance past the retry-after delay
+      const items = await promise;
       
       expect(items).toHaveLength(1);
       expect(axios.get).toHaveBeenCalledTimes(2);

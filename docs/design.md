@@ -39,8 +39,15 @@
 - Failure recovery mechanisms
 
 ### Summary Generation System
-- Level 1 (Core Points) Generator
-- Level 2 (Detailed Overview) Generator
+- Concise Summary Generator
+  - 1-3 sentence format
+  - Answer-Forward validation
+  - Content type optimization
+  - Token usage efficiency
+- ChatGPT Integration
+  - Direct deep analysis option
+  - Custom analysis prompts
+  - User-controlled exploration
 - Time estimation engine
 - Content type detection
 

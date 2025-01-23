@@ -145,19 +145,23 @@ Create a personal platform for managing and consuming content from various servi
 - Enable chronological and priority-based sorting
 
 #### Summary Generation
-- Two-level summary system:
-  - Level 1: Core points/direct answers
-    - Answer headline questions (Betteridge's Law)
-    - Extract key findings
-    - List main conclusions
-  - Level 2: Detailed overview
-    - Supporting points
-    - Context and caveats
-    - Key quotes or timestamps
+- Intelligent Content Summarization:
+  - Capture essential understanding in 1-3 sentences
+  - Each summary must be self-contained and actionable
+  - Include critical context or caveats that change meaning
+  - Prioritize facts, findings, and conclusions over background
+  - For news/announcements: What changed and why it matters
+  - For technical content: Key capabilities and limitations
+  - For analysis pieces: Main arguments and supporting evidence
+  - Recognize when content is too dense for brief summary
+- Direct ChatGPT integration:
+  - One-click deep analysis option
+  - Custom prompt for thorough examination
+  - User-guided exploration
 - Time-to-consume estimates:
   - Reading time for articles
   - Video/audio duration
-  - Complexity indicators
+  - Complexity level indication
 
 #### Topic Organization
 - Automatic topic detection
@@ -231,6 +235,11 @@ Create a personal platform for managing and consuming content from various servi
 6. Historical content accessible within 2 clicks
 7. Priority management takes <2 clicks
 8. Original content accessible within 1 click
+3. Summary generation achieves:
+   - 90% of readers can decide whether to read full content
+   - 80% of readers can accurately explain main points to others
+   - 70% of readers need no additional context for basic understanding
+   - System recognizes and flags content too complex for brief summary
 
 ## Development Priorities
 

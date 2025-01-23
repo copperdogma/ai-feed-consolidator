@@ -25,7 +25,7 @@ Implementing text summarization pipeline
   - [x] Add token refresh mechanism
   - [x] Handle rate limits
   - [x] Add comprehensive error tests
-- [ ] Add rate limiting
+- [x] Add rate limiting
 
 ### Content Processing
 - [x] Design content extraction rules
@@ -66,7 +66,7 @@ Implementing text summarization pipeline
 - [ ] Add user preferences
 - [ ] Implement search functionality
 
-## Previous Task: Level 1 Core Points Extractor (Paused)
+## Previous Task: Level 1 Core Points Extractor (Completed)
 Steps:
 1. OpenAI Integration Setup
    - [x] Add OpenAI dependency
@@ -76,10 +76,10 @@ Steps:
    - [x] Verify integration with tests
 
 2. Core Points Extraction Design
-   - [ ] Design prompt template
-   - [ ] Define output format
-   - [ ] Create types for extracted points
-   - [ ] Design content preprocessing strategy for different platforms
+   - [x] Design prompt template
+   - [x] Define output format
+   - [x] Create types for extracted points
+   - [x] Design content preprocessing strategy for different platforms
 
 3. Platform-Specific Integration
    - [ ] Implement YouTube data fetching
@@ -88,25 +88,25 @@ Steps:
    - [ ] Create platform-specific content normalizers
 
 4. Implementation
-   - [ ] Build extraction service
-   - [ ] Add caching layer
-   - [ ] Create API endpoint
-   - [ ] Add basic error handling
+   - [x] Build extraction service
+   - [x] Add caching layer
+   - [x] Create API endpoint
+   - [x] Add basic error handling
 
 5. Testing & Validation
-   - [ ] Create real-world test samples from each platform
-   - [ ] Write unit tests
-   - [ ] Test with various content types
-   - [ ] Measure and optimize token usage
-   - [ ] Document example outputs
+   - [x] Create real-world test samples from each platform
+   - [x] Write unit tests
+   - [x] Test with various content types
+   - [x] Measure and optimize token usage
+   - [x] Document example outputs
 
 ## High Priority (MVP Phase)
 
 ### Core Features
 - Summary Generation System
-  - [ ] Level 1: Core points extractor
-  - [ ] Level 2: Detailed overview generator
-  - [ ] Implement caching layer
+  - [x] Initial summary generator
+  - [ ] Enhance summary generation with Answer-Forward Testing
+  - [x] Implement caching layer
   - [ ] Set up database in Docker volume
 
 ### Content Integration
@@ -116,10 +116,11 @@ Steps:
   - [ ] Study content filtering strategies
 
 - OpenAI Integration
-  - [ ] Configure API key management
+  - [x] Configure API key management
+  - [x] Create key points extraction prompts
   - [ ] Create summary generation prompts
-  - [ ] Build local caching system
-  - [ ] Set up cost monitoring
+  - [x] Build local caching system
+  - [x] Set up cost monitoring
 
 ### Platform Integration
 - YouTube Integration
@@ -212,6 +213,45 @@ Steps:
   - [x] Reduce auth error test execution time
   - [x] Improve session initialization reliability
   - [x] Add retry mechanisms for flaky tests
+  - [x] Implement rate limiter with comprehensive tests
+  - [x] Add Feedly service error handling and retry tests
+  - [x] Fix authentication component tests
+  - [x] Add proper timer handling in async tests
 
 ## Bugs
 - No known bugs 
+
+### Content Value Documentation
+- [ ] Split first principles in content-value.md into two sections:
+  - Quick summary principles (for key points extraction)
+  - Deep analysis principles (for ChatGPT prompt)
+
+### General Tasks
+- [ ] Research ChatGPT web search capabilities via querystring
+  - Investigate if we can enable web search mode
+  - Evaluate impact on context-gathering
+  - Test fact-checking capabilities
+  - Document findings and implementation approach 
+
+## Current Focus
+- Implement Answer-Forward Testing Framework
+  - Build evaluation harness using GPT-4 for summary quality assessment
+  - Create cost/performance tracking system
+  - Set up automated testing pipeline
+  - Implement prompt refinement feedback loop
+  - Add metrics collection and analysis
+
+## Testing & Optimization
+- Set up model comparison framework
+  - Compare GPT-3.5 vs GPT-4 vs Claude for summary generation
+  - Track cost/performance ratios
+  - Measure latency and token usage
+  - Monitor error rates
+  - Evaluate prompt effectiveness across models
+
+- Implement continuous improvement system
+  - Build feedback aggregation system
+  - Create prompt refinement pipeline
+  - Set up A/B testing framework
+  - Add performance metrics dashboard
+  - Implement cost optimization tracking 

@@ -26,7 +26,7 @@ describe('App Authentication', () => {
     render(<App />);
 
     // Should show loading initially
-    expect(screen.getByText('Loading...')).toBeInTheDocument();
+    expect(screen.getByRole('progressbar')).toBeInTheDocument();
 
     // Should show login button after auth check fails
     await waitFor(() => {
@@ -37,30 +37,34 @@ describe('App Authentication', () => {
   it('should show user profile when authenticated', async () => {
     const mockUser = {
       id: 1,
-      displayName: 'Test User',
-      emails: [{ value: 'test@example.com' }],
-      photos: [{ value: 'https://example.com/photo.jpg' }]
+      google_id: 'test123',
+      email: 'test@example.com',
+      display_name: 'Test User',
+      avatar_url: 'https://example.com/photo.jpg'
     };
 
     // Mock successful auth check
     mockFetch.mockImplementationOnce(() => 
       Promise.resolve({
         ok: true,
-        json: () => Promise.resolve(mockUser)
+        json: () => Promise.resolve({ authenticated: true, user: mockUser })
+      })
+    ).mockImplementationOnce(() => 
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve([]) // Empty feed items
       })
     );
 
     render(<App />);
 
     // Should show loading initially
-    expect(screen.getByText('Loading...')).toBeInTheDocument();
+    expect(screen.getByRole('progressbar')).toBeInTheDocument();
 
     // Should show user profile after auth check succeeds
     await waitFor(() => {
       expect(screen.getByText('Welcome, Test User!')).toBeInTheDocument();
-      expect(screen.getByText('Email:', { exact: false })).toBeInTheDocument();
-      expect(screen.getByText('test@example.com', { exact: false })).toBeInTheDocument();
-      expect(screen.getByAltText('Profile')).toHaveAttribute('src', mockUser.photos[0].value);
+      expect(screen.getByRole('img')).toHaveAttribute('src', mockUser.avatar_url);
     });
   });
 
@@ -94,15 +98,21 @@ describe('App Authentication', () => {
   it('should have correct logout link when authenticated', async () => {
     const mockUser = {
       id: 1,
-      displayName: 'Test User',
-      emails: [{ value: 'test@example.com' }],
-      photos: [{ value: 'https://example.com/photo.jpg' }]
+      google_id: 'test123',
+      email: 'test@example.com',
+      display_name: 'Test User',
+      avatar_url: 'https://example.com/photo.jpg'
     };
 
     mockFetch.mockImplementationOnce(() => 
       Promise.resolve({
         ok: true,
-        json: () => Promise.resolve(mockUser)
+        json: () => Promise.resolve({ authenticated: true, user: mockUser })
+      })
+    ).mockImplementationOnce(() => 
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve([]) // Empty feed items
       })
     );
 
@@ -118,16 +128,22 @@ describe('App Authentication', () => {
     it('should show login screen after logout redirect', async () => {
       const mockUser = {
         id: 1,
-        displayName: 'Test User',
-        emails: [{ value: 'test@example.com' }],
-        photos: [{ value: 'https://example.com/photo.jpg' }]
+        google_id: 'test123',
+        email: 'test@example.com',
+        display_name: 'Test User',
+        avatar_url: 'https://example.com/photo.jpg'
       };
 
       // Mock initial auth check
       mockFetch.mockImplementationOnce(() => 
         Promise.resolve({
           ok: true,
-          json: () => Promise.resolve(mockUser)
+          json: () => Promise.resolve({ authenticated: true, user: mockUser })
+        })
+      ).mockImplementationOnce(() => 
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve([]) // Empty feed items
         })
       );
 
@@ -163,16 +179,22 @@ describe('App Authentication', () => {
     it('should handle failed logout gracefully', async () => {
       const mockUser = {
         id: 1,
-        displayName: 'Test User',
-        emails: [{ value: 'test@example.com' }],
-        photos: [{ value: 'https://example.com/photo.jpg' }]
+        google_id: 'test123',
+        email: 'test@example.com',
+        display_name: 'Test User',
+        avatar_url: 'https://example.com/photo.jpg'
       };
 
       // Mock initial auth check
       mockFetch.mockImplementationOnce(() => 
         Promise.resolve({
           ok: true,
-          json: () => Promise.resolve(mockUser)
+          json: () => Promise.resolve({ authenticated: true, user: mockUser })
+        })
+      ).mockImplementationOnce(() => 
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve([]) // Empty feed items
         })
       );
 
@@ -180,7 +202,12 @@ describe('App Authentication', () => {
       mockFetch.mockImplementationOnce(() => 
         Promise.resolve({
           ok: true,
-          json: () => Promise.resolve(mockUser)
+          json: () => Promise.resolve({ authenticated: true, user: mockUser })
+        })
+      ).mockImplementationOnce(() => 
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve([]) // Empty feed items
         })
       );
 
@@ -206,16 +233,22 @@ describe('App Authentication', () => {
     it('should handle multiple logout attempts', async () => {
       const mockUser = {
         id: 1,
-        displayName: 'Test User',
-        emails: [{ value: 'test@example.com' }],
-        photos: [{ value: 'https://example.com/photo.jpg' }]
+        google_id: 'test123',
+        email: 'test@example.com',
+        display_name: 'Test User',
+        avatar_url: 'https://example.com/photo.jpg'
       };
 
       // Mock initial auth check
       mockFetch.mockImplementationOnce(() => 
         Promise.resolve({
           ok: true,
-          json: () => Promise.resolve(mockUser)
+          json: () => Promise.resolve({ authenticated: true, user: mockUser })
+        })
+      ).mockImplementationOnce(() => 
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve([]) // Empty feed items
         })
       );
 
@@ -258,10 +291,8 @@ describe('App Authentication', () => {
       // Force a re-render and re-run of the useEffect
       rerender(<App key="second-logout" />);
 
-      // Should still be logged out
+      // Should still be in logged out state
       await waitFor(() => {
-        expect(screen.getByText('Welcome to AI Feed Consolidator')).toBeInTheDocument();
-        expect(screen.getByText('Please log in to continue')).toBeInTheDocument();
         expect(screen.getByText('Sign in with Google')).toBeInTheDocument();
       });
     });

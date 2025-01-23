@@ -1,66 +1,48 @@
 import { EventEmitter } from 'events';
 
-interface TokenBucket {
-  tokens: number;
-  lastRefill: number;
-}
-
-interface RateLimiterOptions {
+export interface RateLimiterOptions {
   tokensPerInterval: number;
   intervalMs: number;
-  maxTokens?: number;
+  maxTokens: number;
 }
 
 /**
  * Token bucket rate limiter implementation
  */
 export class RateLimiter {
-  private bucket: TokenBucket;
-  private readonly maxTokens: number;
-  private readonly tokensPerInterval: number;
-  private readonly intervalMs: number;
+  private tokens: number;
+  private lastRefill: number;
+  private options: RateLimiterOptions;
   private readonly events = new EventEmitter();
 
   constructor(options: RateLimiterOptions) {
-    this.tokensPerInterval = options.tokensPerInterval;
-    this.intervalMs = options.intervalMs;
-    this.maxTokens = options.maxTokens || options.tokensPerInterval;
-    
-    this.bucket = {
-      tokens: this.maxTokens,
-      lastRefill: Date.now()
+    this.options = {
+      ...options,
+      maxTokens: options.maxTokens ?? options.tokensPerInterval
     };
+    this.tokens = this.options.maxTokens;
+    this.lastRefill = Date.now();
   }
 
   /**
    * Attempt to consume tokens from the bucket
-   * @param tokens Number of tokens to consume
    * @returns Promise that resolves when tokens are available
    */
   async consume(tokens = 1): Promise<void> {
     this.refillTokens();
 
-    if (this.bucket.tokens >= tokens) {
-      this.bucket.tokens -= tokens;
+    if (this.tokens >= tokens) {
+      this.tokens -= tokens;
       return;
     }
 
-    // Wait for tokens to be available
-    return new Promise((resolve) => {
-      const check = () => {
-        this.refillTokens();
-        if (this.bucket.tokens >= tokens) {
-          this.bucket.tokens -= tokens;
-          resolve();
-        } else {
-          // Calculate time until next token is available
-          const timeToNextToken = this.calculateTimeToNextToken(tokens);
-          setTimeout(() => check(), timeToNextToken);
-        }
-      };
+    // Calculate how long to wait for the required tokens
+    const tokensNeeded = tokens - this.tokens;
+    const timePerToken = this.options.intervalMs / this.options.tokensPerInterval;
+    const waitTime = Math.ceil(tokensNeeded * timePerToken);
 
-      check();
-    });
+    await new Promise(resolve => setTimeout(resolve, waitTime));
+    return this.consume(tokens);
   }
 
   /**
@@ -68,7 +50,7 @@ export class RateLimiter {
    */
   canConsume(tokens = 1): boolean {
     this.refillTokens();
-    return this.bucket.tokens >= tokens;
+    return this.tokens >= tokens;
   }
 
   /**
@@ -76,25 +58,20 @@ export class RateLimiter {
    */
   getTokens(): number {
     this.refillTokens();
-    return this.bucket.tokens;
+    return this.tokens;
   }
 
-  private refillTokens(): void {
+  private refillTokens() {
     const now = Date.now();
-    const timePassed = now - this.bucket.lastRefill;
-    const tokensToAdd = (timePassed / this.intervalMs) * this.tokensPerInterval;
+    const timePassed = now - this.lastRefill;
+    const tokensToAdd = (timePassed * this.options.tokensPerInterval) / this.options.intervalMs;
 
     if (tokensToAdd >= 1) {
-      this.bucket.tokens = Math.min(
-        this.maxTokens,
-        this.bucket.tokens + Math.floor(tokensToAdd)
+      this.tokens = Math.min(
+        this.tokens + Math.floor(tokensToAdd),
+        this.options.maxTokens
       );
-      this.bucket.lastRefill = now;
+      this.lastRefill = now - (timePassed % (this.options.intervalMs / this.options.tokensPerInterval));
     }
-  }
-
-  private calculateTimeToNextToken(tokensNeeded: number): number {
-    const tokensToWaitFor = tokensNeeded - this.bucket.tokens;
-    return Math.ceil((tokensToWaitFor / this.tokensPerInterval) * this.intervalMs);
   }
 } 

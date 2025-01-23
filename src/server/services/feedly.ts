@@ -207,15 +207,18 @@ export class FeedlyService {
             false // Not retryable - client error
           );
         default:
+          // Only retry on 5xx errors or if status is unknown
+          const isRetryable = !status || (status >= 500 && status < 600);
           return new FeedlyError(
             'Unexpected API error',
             error,
-            status ? status >= 500 : true // Retry on 5xx or unknown errors
+            isRetryable
           );
       }
     }
 
-    return new FeedlyError('Unknown error occurred', error);
+    // Unknown errors are not retryable to prevent infinite loops
+    return new FeedlyError('Unknown error occurred', error, false);
   }
 
   /**
@@ -251,23 +254,33 @@ export class FeedlyService {
           }
         }
 
-        // If this was our last attempt, throw the error
+        // If this was the last attempt, throw the error
         if (attempt === options.maxRetries) {
-          throw error;
+          throw lastError;
         }
 
-        // Wait before retrying
-        await new Promise(resolve => setTimeout(resolve, delay));
+        // For rate limit errors, use the delay from the response headers if available
+        if (error instanceof FeedlyError && 
+            axios.isAxiosError(error.cause) && 
+            error.cause.response?.status === 429) {
+          const retryAfter = error.cause.response?.headers?.['retry-after'];
+          if (retryAfter) {
+            const retryDelayMs = parseInt(retryAfter, 10) * 1000;
+            if (!isNaN(retryDelayMs)) {
+              delay = retryDelayMs;
+            }
+          }
+        }
+
+        // Implement exponential backoff with jitter
+        const jitter = Math.random() * 0.3 + 0.85; // Random between 0.85 and 1.15
+        delay = Math.min(delay * 2 * jitter, options.maxDelayMs);
         
-        // Exponential backoff with jitter
-        delay = Math.min(
-          delay * 2 * (0.5 + Math.random()), 
-          options.maxDelayMs
-        );
+        // Wait before the next retry
+        await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
 
-    // This should never happen due to the for loop condition
-    throw lastError || new Error('Retry loop completed without success');
+    throw lastError; // This should never be reached due to the for loop logic
   }
 } 
