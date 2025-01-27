@@ -7,11 +7,16 @@
 - **Project ID**: ai-feed-consolidator
 - **Application Type**: Web Application
 - **Environment**: Development
+- Client ID: [Get from Google Cloud Console]
+- Client Secret: [Get from Google Cloud Console]
+- OAuth Callback: `http://localhost:3003/api/auth/google/callback`
+- Authorized Origins:
+  - Frontend: `http://localhost:5173`
+  - Backend: `http://localhost:3003`
 
 ### Development URLs
 - Frontend: `http://localhost:5173`
 - Backend: `http://localhost:3003`
-- OAuth Callback: `http://localhost:3003/auth/google/callback`
 
 ### Required Environment Variables
 These should be set in `.env`:

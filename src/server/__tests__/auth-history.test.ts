@@ -1,26 +1,30 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
 import { cleanupDatabase as cleanDatabase, createTestUser } from './setup';
 import type { User } from '../services/db';
 import { createApp } from '../app';
 import { pool } from '../services/db';
+import type { Express } from 'express';
+import type { Server } from 'http';
 
 describe('Auth History', () => {
-  let app: ReturnType<typeof createApp>;
+  let app: Express;
+  let server: Server;
   let testUser: User;
   let agent: ReturnType<typeof request.agent>;
 
   beforeEach(async () => {
     try {
       await cleanDatabase();
-      app = createApp();
+      app = await createApp();
+      server = app.listen();
       
       // Create test user with preferences
       testUser = await createTestUser();
       console.log('Created test user:', testUser);
       
       // Create reusable authenticated agent
-      agent = request.agent(app);
+      agent = request.agent(server);
       
       // Initialize session with test user with retries
       let sessionResponse;
@@ -65,6 +69,12 @@ describe('Auth History', () => {
       await cleanDatabase();
       throw error;
     }
+  });
+
+  afterEach(async () => {
+    await new Promise<void>((resolve) => {
+      server.close(() => resolve());
+    });
   });
 
   it('should record login history when accessing protected routes', async () => {

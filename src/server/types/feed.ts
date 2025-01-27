@@ -16,12 +16,11 @@ export interface FeedSource {
  * Represents media content (images, videos) associated with a feed item
  */
 export interface FeedMedia {
-  type: 'image' | 'video';
+  type: string;
   url: string;
   width?: number;
   height?: number;
   contentType?: string;
-  thumbnailUrl?: string;
 }
 
 /**
@@ -35,42 +34,33 @@ export interface YouTubeMetadata {
  * Common interface for feed items from any source
  */
 export interface FeedItem {
-  id: string;                    // Unique identifier
-  sourceId: string;              // ID of the source platform
-  externalId: string;            // Original ID from the source platform
-  url: string;                   // URL to the original content
-  title: string;                 // Content title
-  content: string;               // Full content (may be HTML)
-  contentText?: string;          // Plain text version of content
-  summary?: string;              // Brief summary
-  author?: string;               // Content author
-  publishedAt: Date;            // Publication date
-  source: FeedSource;           // Source information
-  media?: FeedMedia[];          // Associated media
-  topics?: string[];            // Topic tags/categories
-  engagement?: {                // Engagement metrics
-    score: number;              // Normalized engagement score
-    raw?: number;               // Raw engagement number
-    views?: number;
-    likes?: number;
-    shares?: number;
-    comments?: number;
+  id: string;
+  sourceId: string;
+  externalId: string;
+  url: string;
+  title: string;
+  content: string;
+  summary?: string;
+  author?: string;
+  publishedAt: Date;
+  source: FeedSource;
+  media: FeedMedia[];
+  topics: string[];
+  feedConfigId?: number;  // Optional since not all feed items will have this
+  engagement?: {
+    score: number;
+    raw: number;
   };
-  metadata?: {                  // Additional platform-specific data
-    youtube?: YouTubeMetadata;
-    language: string;
-    readTime: number;
-    fingerprint: string;
-    categories: Array<{
-      id: string;
-      label: string;
-    }>;
-    tags: Array<{
-      id: string;
-      label: string;
-    }>;
+  metadata?: Record<string, any>;
+  // Processed content fields
+  processedSummary?: string;
+  contentType?: 'technical' | 'news' | 'analysis' | 'tutorial' | 'entertainment';
+  timeSensitive?: boolean;
+  requiredBackground?: string[];
+  consumptionTime?: {
+    minutes: number;
+    type: 'read' | 'watch' | 'listen';
   };
-  readingTime?: number;         // Estimated reading time in minutes
 }
 
 /**

@@ -15,14 +15,7 @@ declare global {
         ipAddress: string;
         userAgent: string;
       }
-    }
-    // Extend User interface
-    interface User {
-      id: number;
-      google_id: string;
-      email: string;
-      display_name: string | null;
-      avatar_url: string | null;
+      user?: User;
     }
   }
 }
@@ -31,9 +24,9 @@ declare global {
 passport.use(
   new GoogleStrategy(
     {
-      clientID: config.googleClientId,
-      clientSecret: config.googleClientSecret,
-      callbackURL: `${config.serverUrl}/auth/google/callback`,
+      clientID: process.env.GOOGLE_CLIENT_ID || '',
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
+      callbackURL: `${config.serverUrl}/api/auth/google/callback`,
       passReqToCallback: true
     },
     async (req: Request, accessToken: string, refreshToken: string, profile: Profile, done: Function) => {
@@ -44,12 +37,7 @@ passport.use(
           return done(new Error('Invalid profile data'));
         }
 
-        const result = await UserService.findOrCreateUser({
-          googleId: profile.id,
-          email: profile.emails[0].value,
-          displayName: profile.displayName || '',
-          avatarUrl: profile.photos?.[0]?.value || null,
-        });
+        const result = await UserService.findOrCreateGoogleUser(profile);
 
         // Only record successful login attempts for valid users
         if (result?.user && req.loginAttempt) {
@@ -80,20 +68,24 @@ passport.use(
 
 // Serialize user for session
 passport.serializeUser((user: Express.User, done) => {
-  logger.debug({ userId: user.id }, 'Serializing user');
-  done(null, user.id);
+  const typedUser = user as User;
+  logger.debug({ userId: typedUser.id }, 'Serializing user');
+  done(null, typedUser.id);
 });
 
 // Deserialize user from session
 passport.deserializeUser(async (id: number, done) => {
   try {
+    logger.debug({ userId: id }, 'Attempting to deserialize user');
     const user = await UserService.findUserById(id);
     if (user) {
-      logger.debug({ userId: id }, 'User deserialized');
+      logger.debug({ userId: id, user }, 'User deserialized successfully');
+      done(null, user);
     } else {
       logger.warn({ userId: id }, 'User not found during deserialization');
+      // Instead of failing silently, we'll throw an error to trigger session regeneration
+      done(new Error('User not found'));
     }
-    done(null, user);
   } catch (error) {
     logger.error({ err: error, userId: id }, 'Error deserializing user');
     done(error);
@@ -101,58 +93,62 @@ passport.deserializeUser(async (id: number, done) => {
 });
 
 // Middleware to check if user is authenticated
-export const requireAuth: RequestHandler = async (req, res, next): Promise<void> => {
+export const requireAuth: RequestHandler = async (req, res, next) => {
   try {
     // Log session state for debugging
     logger.debug('Session state:', {
+      url: req.url,
+      method: req.method,
+      sessionId: req.sessionID,
       hasSession: !!req.session,
       hasPassport: !!req.session?.passport,
-      hasUser: !!req.user,
-      sessionId: req.sessionID,
+      isAuthenticated: req.isAuthenticated(),
       user: req.user
     });
 
-    // Ensure session is loaded and valid
-    if (!req.session) {
-      logger.error('Session middleware not initialized');
-      res.status(500).json({ message: 'Session middleware not initialized' });
-      return;
-    }
-
-    // If user is already loaded and authenticated, proceed
-    if (req.user) {
-      logger.debug({ userId: (req.user as User).id }, 'User already authenticated');
-      next();
-      return;
-    }
-
-    // Check for passport session and try to load user
-    const userId = req.session.passport?.user;
-    if (!userId) {
-      logger.debug({ sessionId: req.sessionID }, 'No passport session found');
-      res.status(401).json({ message: 'No passport session found' });
-      return;
-    }
-
-    try {
-      const user = await UserService.findUserById(userId);
-      if (!user) {
-        logger.warn({ userId }, 'User not found');
-        res.status(401).json({ message: 'User not found' });
-        return;
+    if (!req.isAuthenticated()) {
+      logger.warn('Unauthorized access attempt');
+      // Record failed access attempt
+      if (req.loginAttempt) {
+        try {
+          await LoginHistoryService.recordLoginAttempt({
+            userId: null,
+            ipAddress: req.loginAttempt.ipAddress,
+            userAgent: req.loginAttempt.userAgent,
+            success: false,
+            loginTime: new Date(),
+            failureReason: 'Unauthorized access attempt',
+            requestPath: req.path
+          });
+        } catch (error) {
+          logger.error({ err: error }, 'Failed to record unauthorized access attempt');
+        }
       }
-
-      // Set the user on the request
-      req.user = user;
-      logger.debug({ userId: user.id }, 'User loaded from session');
-      next();
-    } catch (error) {
-      logger.error({ err: error, userId }, 'Failed to load user');
-      res.status(500).json({ message: 'Failed to load user' });
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
     }
+
+    // Record successful access
+    if (req.loginAttempt && req.user) {
+      try {
+        await LoginHistoryService.recordLoginAttempt({
+          userId: req.user.id,
+          ipAddress: req.loginAttempt.ipAddress,
+          userAgent: req.loginAttempt.userAgent,
+          success: true,
+          loginTime: new Date(),
+          requestPath: req.originalUrl || req.url
+        });
+      } catch (error) {
+        logger.error({ err: error }, 'Failed to record successful access');
+        // Don't block access just because we couldn't record it
+      }
+    }
+
+    next();
   } catch (error) {
-    logger.error({ err: error }, 'Auth middleware error');
-    res.status(500).json({ message: 'Internal server error' });
+    logger.error({ err: error }, 'Error in auth middleware');
+    res.status(500).json({ error: 'Internal server error' });
   }
 };
 

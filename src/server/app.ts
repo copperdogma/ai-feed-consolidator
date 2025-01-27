@@ -6,11 +6,35 @@ import cors from 'cors';
 import { pool, User } from './services/db';
 import { UserService } from './services/user';
 import { LoginHistoryService } from './services/login-history';
+import { FeedItemService } from './services/feed-item';
 import connectMemoryStore from 'memorystore';
-import { requireAuth } from './middleware/auth';
+import { requireAuth, addRequestInfo } from './middleware/auth';
 import { config } from './config';
+import { ContentProcessor } from './services/content-processor';
+import { OpenAIService } from './services/openai';
+import { ProcessedFeedItem } from './types/feed';
+import { logger } from './logger';
+import feedRoutes from './routes/feeds';
 
 const MemoryStore = connectMemoryStore(session);
+
+// Initialize services
+const feedItemService = new FeedItemService(pool);
+
+// Configure passport serialization
+passport.serializeUser((user: Express.User, done) => {
+  const typedUser = user as User;
+  done(null, typedUser.id);
+});
+
+passport.deserializeUser(async (id: number, done) => {
+  try {
+    const user = await UserService.findById(id);
+    done(null, user);
+  } catch (err) {
+    done(err);
+  }
+});
 
 // Extend express session types
 declare module 'express-session' {
@@ -28,75 +52,121 @@ declare global {
   }
 }
 
-// Create Express app instance
-const app = express();
+// Route handlers
+const getFeedItems = async (req: Request, res: Response) => {
+  const userId = Number(req.user?.id);
+  if (!userId || isNaN(userId)) {
+    logger.warn({ userId: req.user?.id }, 'Get feed items attempted without valid user ID');
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
 
-export function createApp(): Express {
+  try {
+    const feedItems = await feedItemService.getSavedItems(userId);
+    res.json(feedItems);
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    logger.error({ error: errorMsg, userId }, 'Failed to fetch feed items');
+    res.status(500).json({ error: 'Failed to fetch feed items' });
+  }
+};
+
+const toggleSavedStatus = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  const userId = Number(req.user?.id);
+  if (!userId || isNaN(userId)) {
+    logger.warn({ userId: req.user?.id }, 'Toggle saved attempted without valid user ID');
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+
+  const { id } = req.params;
+  const { saved } = req.body;
+
+  if (typeof saved !== 'boolean') {
+    logger.warn({ saved }, 'Invalid saved parameter');
+    res.status(400).json({ error: 'Invalid saved parameter' });
+    return;
+  }
+
+  logger.info({ id, saved, userId }, 'Toggle saved request');
+
+  try {
+    await feedItemService.updateItemState(userId, id, { isSaved: saved });
+    logger.info({ id, saved, userId }, 'Successfully toggled saved state');
+    res.json({ success: true });
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    logger.error({ error: errorMsg, id, saved, userId }, 'Failed to toggle saved state');
+    res.status(500).json({ error: 'Failed to toggle saved state' });
+  }
+};
+
+export async function createApp(): Promise<Express> {
+  const app = express();
+
   // Initialize services
   LoginHistoryService.initialize(pool);
 
-  // Middleware
+  // Middleware setup
   app.use(express.json());
-  
-  // Configure CORS
   app.use(cors({
-    origin: 'http://localhost:5173', // Vite dev server default port
+    origin: config.clientUrl,
     credentials: true
   }));
-  
+
   // Configure session middleware
   app.use(session({
-    secret: config.sessionSecret,
+    store: new MemoryStore({
+      checkPeriod: 86400000 // prune expired entries every 24h
+    }),
+    secret: process.env.SESSION_SECRET || 'your-secret-key',
     resave: false,
     saveUninitialized: false,
-    store: new MemoryStore({
-      checkPeriod: 86400000,
-      stale: false
-    }),
     cookie: {
       secure: process.env.NODE_ENV === 'production',
       httpOnly: true,
-      maxAge: 24 * 60 * 60 * 1000
-    },
-    name: 'connect.sid',
-    rolling: true
+      maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    }
   }));
 
-  // Initialize passport and restore authentication state from session
+  // Initialize passport and session
   app.use(passport.initialize());
   app.use(passport.session());
 
-  // Passport serialization
-  passport.serializeUser((user: Express.User, done) => {
-    const typedUser = user as User;
-    console.log('Serializing user:', { userId: typedUser.id });
-    done(null, typedUser.id);
-  });
+  // Add request info middleware globally
+  app.use(addRequestInfo);
 
-  passport.deserializeUser(async (id: number, done) => {
-    try {
-      console.log('Deserializing user:', { userId: id });
-      
-      const result = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
-      const user = result.rows[0];
-      if (!user) {
-        console.warn('User not found during deserialization', { userId: id });
-        return done(null, false);
-      }
-
-      console.log('Successfully deserialized user:', { userId: id });
-      done(null, user);
-    } catch (err) {
-      console.error('Error deserializing user:', err);
-      done(err, false);
-    }
-  });
+  // Add session debugging middleware in test environment
+  if (process.env.NODE_ENV === 'test') {
+    app.use((req, res, next) => {
+      // Save session after the response is sent
+      const oldEnd = res.end;
+      res.end = function (chunk: any, encoding: BufferEncoding, cb?: () => void) {
+        if (req.session) {
+          // Ensure session ID is set
+          if (!req.sessionID) {
+            req.sessionID = require('crypto').randomBytes(16).toString('hex');
+            logger.debug('Generated missing session ID:', req.sessionID);
+          }
+          req.session.save((err) => {
+            if (err) {
+              logger.error({ err }, 'Error saving session');
+            }
+            oldEnd.apply(res, [chunk, encoding, cb]);
+          });
+        } else {
+          oldEnd.apply(res, [chunk, encoding, cb]);
+        }
+      } as any;
+      next();
+    });
+  }
 
   // Google OAuth Strategy
   passport.use(new GoogleStrategy({
-    clientID: config.googleClientId,
-    clientSecret: config.googleClientSecret,
-    callbackURL: '/api/auth/google/callback'
+    clientID: process.env.GOOGLE_CLIENT_ID || '',
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
+    callbackURL: `${config.serverUrl}/api/auth/google/callback`
   }, async (accessToken, refreshToken, profile, done) => {
     try {
       if (!profile || !profile.id) {
@@ -104,19 +174,8 @@ export function createApp(): Express {
         return done(null, false, { message: 'Invalid profile data' });
       }
 
-      const result = await pool.query('SELECT * FROM users WHERE google_id = $1', [profile.id]);
-      const user = result.rows[0];
-      if (user) {
-        return done(null, user);
-      }
-
-      // User not found - this is expected in test environment
-      if (process.env.NODE_ENV === 'test') {
-        return done(null, false, { message: 'User not found' });
-      }
-
-      // In production, we would create a new user here
-      done(null, false, { message: 'User not found' });
+      const { user } = await UserService.findOrCreateGoogleUser(profile);
+      return done(null, user);
     } catch (err) {
       console.error('Error in Google strategy:', err);
       done(err);
@@ -125,202 +184,20 @@ export function createApp(): Express {
 
   // Auth routes
   app.get('/api/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
-  
-  app.get('/api/auth/google/callback', 
-    (async (req: Request, res: Response, next: NextFunction) => {
-      // In test environment, simulate successful authentication
-      if (process.env.NODE_ENV === 'test' && req.query.code === 'valid-code') {
-        try {
-          // Parse the mock profile from query parameter
-          const mockProfile = req.query.profile ? JSON.parse(req.query.profile as string) : null;
-          if (!mockProfile || !mockProfile.id) {
-            console.error('No mock profile provided');
-            res.status(400).json({ error: 'No mock profile provided' });
-            return;
-          }
+  app.get('/api/auth/google/callback', passport.authenticate('google', {
+    successRedirect: config.clientUrl,
+    failureRedirect: `${config.clientUrl}/login`
+  }));
 
-          // Look up the test user by Google ID
-          const result = await pool.query('SELECT * FROM users WHERE google_id = $1', [mockProfile.id]);
-          const testUser = result.rows[0];
-          if (!testUser) {
-            console.error('Test user not found:', { googleId: mockProfile.id });
-            res.status(401).json({ error: 'Test user not found' });
-            return;
-          }
+  // Mount auth routes
+  app.use('/api/auth', (await import('./routes/auth.ts')).default);
 
-          // Ensure session exists
-          if (!req.session) {
-            console.error('Session not initialized');
-            res.status(500).json({ error: 'Session not initialized' });
-            return;
-          }
-
-          // Log in the user and wait for session to be saved
-          await new Promise<void>((resolve, reject) => {
-            req.login(testUser, (err) => {
-              if (err) {
-                console.error('Failed to log in user:', err);
-                reject(err);
-                return;
-              }
-              req.session.save((err) => {
-                if (err) {
-                  console.error('Failed to save session:', err);
-                  reject(err);
-                } else {
-                  resolve();
-                }
-              });
-            });
-          });
-
-          console.log('Test user logged in:', {
-            sessionId: req.sessionID,
-            passport: req.session.passport,
-            user: req.user,
-            authenticated: req.isAuthenticated()
-          });
-
-          res.redirect('/');
-          return;
-        } catch (err) {
-          console.error('Error in test callback:', err);
-          next(err);
-          return;
-        }
-      }
-      next();
-    }) as RequestHandler,
-    passport.authenticate('google', {
-      successRedirect: '/',
-      failureRedirect: '/login'
-    })
-  );
-
-  // Session verification endpoint
-  app.get('/api/auth/verify', async (req: Request, res: Response) => {
-    // Log session state for debugging
-    console.debug('Session verification request:', {
-      sessionId: req.sessionID,
-      hasSession: !!req.session,
-      hasPassport: !!req.session?.passport,
-      isAuthenticated: req.isAuthenticated(),
-      user: req.user
-    });
-
-    // Record login attempt
-    try {
-      const user = req.user as User | undefined;
-      const userId = user?.id;
-      if (userId) {
-        await LoginHistoryService.recordLoginAttempt({
-          userId,
-          success: true,
-          ipAddress: req.ip || req.socket.remoteAddress || '',
-          userAgent: req.get('user-agent') || '',
-          loginTime: new Date(),
-          requestPath: req.path,
-        });
-      }
-    } catch (error) {
-      console.error('Error recording login attempt:', error);
-      // Don't fail the request just because we couldn't record it
-    }
-
-    // Return session state
-    const response = {
-      authenticated: req.isAuthenticated(),
-      session: req.session,
-      passport: req.session?.passport,
-      user: req.user,
-      sessionId: req.sessionID
-    };
-
-    console.debug('Session verification response:', response);
-
-    if (req.isAuthenticated()) {
-      res.json(response);
-    } else {
-      res.status(401).json(response);
-    }
-  });
-
-  // Session initialization endpoint for tests
-  app.post('/api/auth/session', (async (req: Request, res: Response) => {
-    if (process.env.NODE_ENV !== 'test') {
-      res.status(404).json({ error: 'Not found' });
-      return;
-    }
-
-    // Initialize session with provided user
-    const { passport } = req.body;
-    if (!passport || !passport.user) {
-      res.status(400).json({ error: 'Invalid session data' });
-      return;
-    }
-
-    try {
-      // Get the user from the database
-      const result = await pool.query('SELECT * FROM users WHERE id = $1', [passport.user]);
-      const user = result.rows[0];
-      
-      if (!user) {
-        console.warn('User not found during session initialization', { userId: passport.user });
-        res.status(404).json({ error: 'User not found' });
-        return;
-      }
-
-      // Initialize session
-      await new Promise<void>((resolve, reject) => {
-        req.login(user, (err) => {
-          if (err) {
-            console.error('Failed to log in user:', err);
-            reject(err);
-            return;
-          }
-          req.session.save((err) => {
-            if (err) {
-              console.error('Failed to save session:', err);
-              reject(err);
-            } else {
-              resolve();
-            }
-          });
-        });
-      });
-
-      console.log('Session initialized successfully:', {
-        sessionId: req.sessionID,
-        passport: req.session.passport,
-        user: req.user,
-        authenticated: req.isAuthenticated()
-      });
-
-      res.json({
-        authenticated: req.isAuthenticated(),
-        session: req.session,
-        passport: req.session.passport,
-        user: req.user,
-        sessionId: req.sessionID
-      });
-
-    } catch (err) {
-      console.error('Error initializing session:', err);
-      res.status(500).json({ error: 'Failed to initialize session' });
-    }
-  }) as RequestHandler);
-
-  // Protected route example
-  app.get('/api/protected', requireAuth, ((req: Request, res: Response) => {
-    res.json({ user: req.user });
-  }) as RequestHandler);
-
-  // Protected route
-  app.get('/protected', requireAuth, ((req: Request, res: Response) => {
-    res.json({ message: 'Access granted', user: req.user });
-  }) as RequestHandler);
+  // Protected routes
+  app.get('/api/feed/items', requireAuth, getFeedItems);
+  app.post('/api/feed/items/:id/toggle-saved', requireAuth, toggleSavedStatus);
 
   return app;
 }
 
-export { app }; 
+// Remove the standalone app export
+// export { app }; 

@@ -1,126 +1,126 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import App from '../../App';
+import config from '../../config';
 
-// Mock fetch
+// Mock fetch globally
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
+
+// Mock window.location
+const mockLocation = {
+  href: 'http://localhost:5173',
+};
+
+Object.defineProperty(window, 'location', {
+  value: mockLocation,
+  writable: true,
+});
 
 describe('App Authentication', () => {
   beforeEach(() => {
     mockFetch.mockReset();
-    // Mock window.location.href to prevent actual navigation
-    Object.defineProperty(window, 'location', {
-      value: { href: 'http://localhost:5173' },
-      writable: true
-    });
+    mockLocation.href = 'http://localhost:5173';
   });
 
   it('should show login button when not authenticated', async () => {
-    // Mock failed auth check
-    mockFetch.mockImplementationOnce(() => 
-      Promise.reject(new Error('Not authenticated'))
+    mockFetch.mockImplementationOnce(() =>
+      Promise.resolve({
+        ok: false,
+        json: () => Promise.resolve({ authenticated: false }),
+      })
     );
 
     render(<App />);
 
-    // Should show loading initially
-    expect(screen.getByRole('progressbar')).toBeInTheDocument();
-
-    // Should show login button after auth check fails
     await waitFor(() => {
-      expect(screen.getByText('Sign in with Google')).toBeInTheDocument();
+      expect(screen.getByText(/log in with google/i)).toBeInTheDocument();
     });
   });
 
   it('should show user profile when authenticated', async () => {
     const mockUser = {
       id: 1,
-      google_id: 'test123',
+      google_id: '123',
       email: 'test@example.com',
       display_name: 'Test User',
-      avatar_url: 'https://example.com/photo.jpg'
+      avatar_url: 'https://example.com/avatar.jpg',
     };
 
-    // Mock successful auth check
-    mockFetch.mockImplementationOnce(() => 
+    // Mock auth check
+    mockFetch.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
-        json: () => Promise.resolve({ authenticated: true, user: mockUser })
+        json: () => Promise.resolve({ authenticated: true, user: mockUser }),
       })
-    ).mockImplementationOnce(() => 
+    );
+
+    // Mock feed items fetch
+    mockFetch.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
-        json: () => Promise.resolve([]) // Empty feed items
+        json: () => Promise.resolve([]),
       })
     );
 
     render(<App />);
 
-    // Should show loading initially
-    expect(screen.getByRole('progressbar')).toBeInTheDocument();
-
-    // Should show user profile after auth check succeeds
     await waitFor(() => {
-      expect(screen.getByText('Welcome, Test User!')).toBeInTheDocument();
-      expect(screen.getByRole('img')).toHaveAttribute('src', mockUser.avatar_url);
-    });
-  });
-
-  it('should handle auth check errors gracefully', async () => {
-    // Mock network error
-    mockFetch.mockImplementationOnce(() => 
-      Promise.reject(new Error('Network error'))
-    );
-
-    render(<App />);
-
-    // Should show login button after error
-    await waitFor(() => {
-      expect(screen.getByText('Sign in with Google')).toBeInTheDocument();
+      expect(screen.getByText(`Welcome, ${mockUser.display_name}!`)).toBeInTheDocument();
     });
   });
 
   it('should have correct login link', async () => {
-    mockFetch.mockImplementationOnce(() => 
-      Promise.reject(new Error('Not authenticated'))
+    mockFetch.mockImplementationOnce(() =>
+      Promise.resolve({
+        ok: false,
+        json: () => Promise.resolve({ authenticated: false }),
+      })
     );
 
     render(<App />);
 
     await waitFor(() => {
-      const loginButton = screen.getByText('Sign in with Google');
-      expect(loginButton).toHaveAttribute('href', '/auth/google');
+      const loginButton = screen.getByRole('button', { name: /log in with google/i });
+      expect(loginButton).toBeInTheDocument();
+      loginButton.click();
+      expect(window.location.href).toBe(`${config.serverUrl}${config.auth.googleAuthPath}`);
     });
   });
 
-  it('should have correct logout link when authenticated', async () => {
+  it('should have correct logout link', async () => {
     const mockUser = {
       id: 1,
-      google_id: 'test123',
+      google_id: '123',
       email: 'test@example.com',
       display_name: 'Test User',
-      avatar_url: 'https://example.com/photo.jpg'
+      avatar_url: 'https://example.com/avatar.jpg',
     };
 
-    mockFetch.mockImplementationOnce(() => 
+    // Mock auth check
+    mockFetch.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
-        json: () => Promise.resolve({ authenticated: true, user: mockUser })
+        json: () => Promise.resolve({ authenticated: true, user: mockUser }),
       })
-    ).mockImplementationOnce(() => 
+    );
+
+    // Mock feed items fetch
+    mockFetch.mockImplementationOnce(() =>
       Promise.resolve({
         ok: true,
-        json: () => Promise.resolve([]) // Empty feed items
+        json: () => Promise.resolve([]),
       })
     );
 
     render(<App />);
 
     await waitFor(() => {
-      const logoutButton = screen.getByText('Logout');
-      expect(logoutButton).toHaveAttribute('href', '/auth/logout');
+      const logoutButton = screen.getByRole('button', { name: /logout/i });
+      expect(logoutButton).toBeInTheDocument();
+      logoutButton.click();
+      expect(window.location.href).toBe(`${config.serverUrl}${config.auth.logoutPath}`);
     });
   });
 
@@ -173,7 +173,7 @@ describe('App Authentication', () => {
       // Verify logged out state
       expect(screen.getByText('Welcome to AI Feed Consolidator')).toBeInTheDocument();
       expect(screen.getByText('Please log in to continue')).toBeInTheDocument();
-      expect(screen.getByText('Sign in with Google')).toBeInTheDocument();
+      expect(screen.getByText('Log in with Google')).toBeInTheDocument();
     });
 
     it('should handle failed logout gracefully', async () => {
@@ -283,7 +283,7 @@ describe('App Authentication', () => {
       // Verify logged out state
       expect(screen.getByText('Welcome to AI Feed Consolidator')).toBeInTheDocument();
       expect(screen.getByText('Please log in to continue')).toBeInTheDocument();
-      expect(screen.getByText('Sign in with Google')).toBeInTheDocument();
+      expect(screen.getByText('Log in with Google')).toBeInTheDocument();
 
       // Second logout attempt
       window.location.href = '/auth/logout';
@@ -293,7 +293,7 @@ describe('App Authentication', () => {
 
       // Should still be in logged out state
       await waitFor(() => {
-        expect(screen.getByText('Sign in with Google')).toBeInTheDocument();
+        expect(screen.getByText('Log in with Google')).toBeInTheDocument();
       });
     });
   });

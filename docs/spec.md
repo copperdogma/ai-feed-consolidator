@@ -122,20 +122,24 @@ Create a personal platform for managing and consuming content from various servi
 
 ### 1. Content Integration
 - Connect to multiple content sources:
+  - Direct RSS/Atom feeds (primary)
   - YouTube (Watch Later, Playlists)
   - X/Twitter (Bookmarks)
-  - Feedly (Saved Items)
   - Email (Priority Flagging)
   - Slack (Saved Items, Important Messages)
-- Maintain platform sync:
-  - Update status when consumed
-  - Reflect priority changes
+  - Future: Feedly OPML import for initial feed setup
+- Maintain local state:
+  - Track read/unread status
+  - Save items for later
   - Handle offline scenarios
 - Email integration:
   - Priority prefix in subject ("**: ")
   - URL extraction
   - Metadata parsing
 - Handle authentication securely
+  - Store feed credentials safely
+  - Manage API keys for services
+  - Encrypt sensitive data
 
 ### 2. Content Organization
 #### Timeline Management

@@ -1,5 +1,5 @@
 /** @jsxImportSource react */
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   Container,
   Typography,
@@ -8,10 +8,18 @@ import {
   CircularProgress,
   Avatar,
   Grid,
+  Stack,
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import { FeedItemCard } from './components/FeedItemCard';
 import { ProcessedFeedItem } from './server/types/feed';
+import GoogleIcon from '@mui/icons-material/Google';
+import RssFeedIcon from '@mui/icons-material/RssFeed';
+import config from './config';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ThemeProvider, CssBaseline } from '@mui/material';
+import { theme } from './theme';
+import { FeedManagement } from './components/FeedManagement';
 
 interface User {
   id: number;
@@ -19,6 +27,7 @@ interface User {
   email: string;
   display_name: string | null;
   avatar_url: string | null;
+  feedly_access_token?: string;
 }
 
 interface AuthResponse {
@@ -54,6 +63,8 @@ const ContentBox = styled(Box)(({ theme }) => ({
   }
 }));
 
+const queryClient = new QueryClient();
+
 function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -73,18 +84,39 @@ function App() {
       .finally(() => setLoading(false));
   }, []);
 
-  useEffect(() => {
-    if (user) {
-      setLoadingFeed(true);
-      fetch('http://localhost:3003/api/feed/items', {
+  const loadFeedItems = useCallback(async () => {
+    if (!user) return;
+    setLoadingFeed(true);
+    try {
+      const response = await fetch(`${config.serverUrl}/api/feed/items`, {
         credentials: 'include'
-      })
-        .then(res => res.json())
-        .then(data => setFeedItems(data))
-        .catch(console.error)
-        .finally(() => setLoadingFeed(false));
+      });
+
+      if (!response) {
+        console.error('No response received from server');
+        setFeedItems([]);
+        return;
+      }
+
+      if (!response.ok) {
+        console.error(`HTTP error! status: ${response.status}`);
+        setFeedItems([]);
+        return;
+      }
+
+      const data = await response.json();
+      setFeedItems(data);
+    } catch (error) {
+      console.error('Error loading feed items:', error);
+      setFeedItems([]);
+    } finally {
+      setLoadingFeed(false);
     }
   }, [user]);
+
+  useEffect(() => {
+    loadFeedItems();
+  }, [loadFeedItems]);
 
   if (loading) {
     return (
@@ -106,57 +138,80 @@ function App() {
           <Typography variant="body1" gutterBottom>
             Please log in to continue
           </Typography>
-          <Button
-            href="/auth/google"
-            variant="contained"
-            size="large"
-            color="primary"
-          >
-            Sign in with Google
-          </Button>
+          <Stack spacing={2} direction="column" alignItems="center">
+            <Button
+              variant="contained"
+              color="primary"
+              onClick={() => window.location.href = `${config.serverUrl}${config.auth.googleAuthPath}`}
+              startIcon={<GoogleIcon />}
+            >
+              Log in with Google
+            </Button>
+          </Stack>
         </ContentBox>
       </PageContainer>
     );
   }
 
   return (
-    <PageContainer>
-      <ContentBox>
-        <Box sx={{ mb: 4, textAlign: 'center' }}>
-          <Typography variant="h4" component="h1" gutterBottom>
-            Welcome, {user.display_name || 'User'}!
-          </Typography>
-          {user.avatar_url && (
-            <Avatar
-              src={user.avatar_url}
-              alt={user.display_name || 'Profile'}
-              imgProps={{ referrerPolicy: 'no-referrer' }}
-            />
-          )}
-        </Box>
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <FeedManagement />
+        <PageContainer>
+          <ContentBox>
+            <Box sx={{ mb: 4, textAlign: 'center' }}>
+              <Typography variant="h4" component="h1" gutterBottom>
+                Welcome, {user.display_name || 'User'}!
+              </Typography>
+              {user.avatar_url && (
+                <Avatar
+                  src={user.avatar_url}
+                  alt={user.display_name || 'Profile'}
+                  imgProps={{ referrerPolicy: 'no-referrer' }}
+                />
+              )}
+              {!user.feedly_access_token && (
+                <Button
+                  variant="outlined"
+                  color="primary"
+                  onClick={() => window.location.href = `${config.serverUrl}/api/auth/feedly`}
+                  startIcon={<RssFeedIcon />}
+                  sx={{ mt: 2 }}
+                >
+                  Connect Feedly Account
+                </Button>
+              )}
+            </Box>
 
-        {loadingFeed ? (
-          <CircularProgress />
-        ) : feedItems.length > 0 ? (
-          <Box sx={{ width: '100%' }}>
-            {feedItems.map(item => (
-              <FeedItemCard key={item.id} item={item} />
-            ))}
-          </Box>
-        ) : (
-          <Typography>No feed items available</Typography>
-        )}
+            {loadingFeed ? (
+              <CircularProgress />
+            ) : feedItems.length > 0 ? (
+              <Box sx={{ width: '100%' }}>
+                {feedItems.map(item => (
+                  <FeedItemCard 
+                    key={item.id} 
+                    item={item} 
+                    onRefresh={loadFeedItems}
+                  />
+                ))}
+              </Box>
+            ) : (
+              <Typography>No feed items available</Typography>
+            )}
 
-        <Button
-          href="/auth/logout"
-          variant="outlined"
-          color="primary"
-          sx={{ mt: 2 }}
-        >
-          Logout
-        </Button>
-      </ContentBox>
-    </PageContainer>
+            <Button
+              variant="outlined"
+              color="primary"
+              onClick={() => window.location.href = `${config.serverUrl}${config.auth.logoutPath}`}
+              sx={{ mt: 2 }}
+            >
+              Logout
+            </Button>
+          </ContentBox>
+        </PageContainer>
+      </ThemeProvider>
+    </QueryClientProvider>
   );
 }
 

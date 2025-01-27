@@ -36,7 +36,10 @@ export class LoginHistoryService {
 
     try {
       await withTransaction(async (client: PoolClient) => {
-        await client.query('SET TRANSACTION ISOLATION LEVEL READ COMMITTED');
+        // Set transaction isolation level and timeout
+        await client.query('SET TRANSACTION ISOLATION LEVEL SERIALIZABLE');
+        await client.query('SET statement_timeout = 30000'); // 30 seconds
+        await client.query('SET lock_timeout = 30000'); // 30 seconds
 
         // For failed attempts, we don't need a user ID
         if (!attempt.success) {
@@ -46,7 +49,7 @@ export class LoginHistoryService {
         // Only verify user existence for successful logins with a user ID
         if (attempt.success && attempt.userId !== null) {
           const userExists = await client.query(
-            'SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)',
+            'SELECT EXISTS(SELECT 1 FROM users WHERE id = $1) as exists',
             [attempt.userId]
           );
 
@@ -63,6 +66,7 @@ export class LoginHistoryService {
           INSERT INTO login_history (
             user_id, success, ip_address, user_agent, login_time, failure_reason, request_path
           ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+          RETURNING id
         `, [
           attempt.userId,
           attempt.success,
@@ -70,7 +74,7 @@ export class LoginHistoryService {
           attempt.userAgent,
           loginTime.toISOString(),
           attempt.failureReason || null,
-          attempt.requestPath
+          attempt.requestPath || null
         ]);
       });
     } catch (error) {
@@ -86,10 +90,23 @@ export class LoginHistoryService {
 
     try {
       return await withTransaction(async (client: PoolClient) => {
-        await client.query('SET TRANSACTION ISOLATION LEVEL READ COMMITTED');
+        // Set transaction isolation level and timeout
+        await client.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
+        await client.query('SET statement_timeout = 30000'); // 30 seconds
+        await client.query('SET lock_timeout = 30000'); // 30 seconds
+
+        // Verify user exists
+        const userExists = await client.query(
+          'SELECT EXISTS(SELECT 1 FROM users WHERE id = $1) as exists',
+          [userId]
+        );
+
+        if (!userExists.rows[0].exists) {
+          return []; // Return empty array if user doesn't exist
+        }
 
         // Get login history for both successful and failed attempts
-        const result = await client.query<Omit<LoginHistoryEntry, 'loginTime'> & { loginTime: string }>(`
+        const result = await client.query<LoginHistoryEntry>(`
           SELECT 
             id,
             user_id as "userId",
@@ -100,12 +117,13 @@ export class LoginHistoryService {
             failure_reason as "failureReason",
             request_path as "requestPath"
           FROM login_history
-          WHERE user_id = $1 OR (user_id IS NULL AND success = false)
+          WHERE user_id = $1 OR (user_id IS NULL AND ip_address = (
+            SELECT ip_address FROM login_history WHERE user_id = $1 ORDER BY login_time DESC LIMIT 1
+          ))
           ORDER BY login_time DESC
           LIMIT $2
         `, [userId, limit]);
 
-        // Convert login_time strings to Date objects
         return result.rows.map(row => ({
           ...row,
           loginTime: new Date(row.loginTime)

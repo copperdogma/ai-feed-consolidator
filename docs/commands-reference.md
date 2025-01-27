@@ -2,6 +2,7 @@
 
 20240120: Updated by Cam Marsollier with Claude 3.5 Sonnet to add code quality commands
 20240320: Updated by Cam Marsollier with Claude 3.5 Sonnet to add test commands
+20240326: Updated by Cam Marsollier with Claude 3.5 Sonnet to add migration best practices
 
 This document serves as the authoritative reference for commands, paths, and operations specific to the AI Feed Consolidator project.
 
@@ -28,7 +29,6 @@ npm run format      # Format code with Prettier
 npm run type-check  # TypeScript type checking
 
 # Testing
-npm run test        # Run tests in watch mode (requires manual quit)
 npm run test:ci     # Run tests once and exit (good for CI/CD)
 npm run test:coverage # Run tests with coverage report
 
@@ -178,28 +178,33 @@ brew services stop postgresql@14
 initdb -D /usr/local/var/postgresql@14
 
 # Create development database
-createdb dev-ai-feed-consolidator-db
+createdb ai-feed-dev
 
 # Create test database
-createdb test-ai-feed-consolidator-db
+createdb ai-feed-test
 
 # Access development database CLI
-psql dev-ai-feed-consolidator-db
+psql ai-feed-dev
 
 # Access test database CLI
-psql test-ai-feed-consolidator-db
+psql ai-feed-test
 
-# Common psql commands
-\dt                           # List tables
-\d table_name                 # Describe table
-\l                           # List databases
-\du                          # List users
-\df                          # List functions
-\dv                          # List views
-\dn                          # List schemas
+# Common psql commands (pipe through cat to avoid interactive pager)
+\dt | cat                           # List tables
+\d table_name | cat                 # Describe table
+\l | cat                           # List databases
+\du | cat                          # List users
+\df | cat                          # List functions
+\dv | cat                          # List views
+\dn | cat                          # List schemas
 \timing                      # Toggle query timing
 \x                           # Toggle expanded display
 \q                           # Quit psql
+
+# Examples with cat to avoid pager
+psql -d ai-feed-dev -c "\dt" | cat     # List all tables
+psql -d ai-feed-dev -c "\d users" | cat # Describe users table
+psql -d ai-feed-dev -c "SELECT * FROM users" | cat # Query results
 ```
 
 #### Database Maintenance
@@ -220,38 +225,114 @@ REINDEX TABLE table_name;
 SELECT pg_size_pretty(pg_total_relation_size('table_name'));
 
 # View database size
-SELECT pg_size_pretty(pg_database_size('dev-ai-feed-consolidator-db'));
+SELECT pg_size_pretty(pg_database_size('ai-feed-dev'));
 
 # Kill all connections to development database
 SELECT pg_terminate_backend(pg_stat_activity.pid)
 FROM pg_stat_activity
-WHERE pg_stat_activity.datname = 'dev-ai-feed-consolidator-db'
+WHERE pg_stat_activity.datname = 'ai-feed-dev'
   AND pid <> pg_backend_pid();
 ```
 
 #### Sequelize Commands
 ```bash
 # Generate new migration
-npx sequelize-cli migration:generate --name add-fields-to-content
+npx sequelize-cli migration:generate --name migration-name
 
 # Run migrations (development)
-npx sequelize-cli db:migrate
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/ai-feed-dev npx sequelize-cli db:migrate
 
 # Run migrations (test)
-npx sequelize-cli db:migrate --env test
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/ai-feed-test npx sequelize-cli db:migrate --env test
 
 # Run migrations (production)
-npx sequelize-cli db:migrate --env production
+DATABASE_URL=$PROD_DATABASE_URL npx sequelize-cli db:migrate --env production
+
+# Check migration status
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/ai-feed-dev npx sequelize-cli db:migrate:status
 
 # Undo last migration
 npx sequelize-cli db:migrate:undo
 
 # Undo all migrations
 npx sequelize-cli db:migrate:undo:all
-
-# Show migration status
-npx sequelize-cli db:migrate:status
 ```
+
+#### Migration Best Practices
+1. **Naming Convention**
+   - Use timestamp prefix: YYYYMMDDHHMMSS
+   - Descriptive names: `create-table`, `add-column`, `modify-column`
+   - Example: `20240127000000-create-auth-tables.cjs`
+
+2. **Structure**
+   - Always include both `up` and `down` methods
+   - Use explicit column types from Sequelize
+   - Add relevant indexes in same migration
+   - Include table/column comments
+
+3. **Safety**
+   - Make migrations reversible
+   - Test both up and down migrations
+   - Run migrations on test DB first
+   - Back up production DB before migrating
+
+4. **Documentation**
+   - Comment complex migrations
+   - Update schema documentation
+   - Record migration in changelog
+   - Document any manual steps
+
+### Running SQL Migrations
+```bash
+# Run all SQL migrations in order
+for f in migrations/0*.sql; do echo "Running $f..."; psql database_name -f "$f"; done
+
+# Run specific SQL migration
+psql database_name -f migrations/specific_migration.sql
+
+# Run SQL migrations with error checking
+for f in migrations/0*.sql; do
+  echo "Running $f..."
+  if ! psql database_name -f "$f"; then
+    echo "Error running $f"
+    exit 1
+  fi
+done
+```
+
+### Migration Workflow
+1. Create development database if it doesn't exist:
+   ```bash
+   createdb ai-feed-dev
+   ```
+
+2. Create test database if it doesn't exist:
+   ```bash
+   createdb ai-feed-test
+   ```
+
+3. Run base SQL migrations first (if any):
+   ```bash
+   for f in migrations/0*.sql; do psql database_name -f "$f"; done
+   ```
+
+4. Run Sequelize migrations:
+   ```bash
+   # Development
+   DATABASE_URL=postgres://postgres:postgres@localhost:5432/ai-feed-dev npx sequelize-cli db:migrate
+
+   # Test
+   DATABASE_URL=postgres://postgres:postgres@localhost:5432/ai-feed-test npx sequelize-cli db:migrate --env test
+   ```
+
+5. Verify migrations:
+   ```bash
+   # Check migration status
+   npx sequelize-cli db:migrate:status
+
+   # Verify table structure
+   psql database_name -c "\d table_name"
+   ```
 
 #### PostgreSQL Production
 ```bash
@@ -278,12 +359,12 @@ psql "postgresql://<username>:<password>@<host>:<port>"
 -- Kill all connections
 SELECT pg_terminate_backend(pg_stat_activity.pid)
 FROM pg_stat_activity
-WHERE pg_stat_activity.datname = 'dev-ai-feed-consolidator-db'
+WHERE pg_stat_activity.datname = 'ai-feed-dev'
   AND pid <> pg_backend_pid();
 
 -- Drop and recreate
-DROP DATABASE IF EXISTS "dev-ai-feed-consolidator-db";
-CREATE DATABASE "dev-ai-feed-consolidator-db";
+DROP DATABASE IF EXISTS "ai-feed-dev";
+CREATE DATABASE "ai-feed-dev";
 ```
 
 ## Common Paths

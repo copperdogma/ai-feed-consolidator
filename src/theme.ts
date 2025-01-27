@@ -1,17 +1,14 @@
-import { createTheme } from '@mui/material/styles';
+import { createTheme } from '@mui/material';
 
 // Create a theme instance
-const theme = createTheme({
+export const theme = createTheme({
   palette: {
+    mode: 'light',
     primary: {
       main: '#1976d2',
-      light: '#42a5f5',
-      dark: '#1565c0',
     },
     secondary: {
-      main: '#9c27b0',
-      light: '#ba68c8',
-      dark: '#7b1fa2',
+      main: '#dc004e',
     },
     background: {
       default: '#f5f5f5',
@@ -30,6 +27,14 @@ const theme = createTheme({
     ].join(','),
   },
   components: {
+    MuiCard: {
+      styleOverrides: {
+        root: {
+          borderRadius: 8,
+          boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+        },
+      },
+    },
     MuiButton: {
       styleOverrides: {
         root: {
@@ -39,6 +44,4 @@ const theme = createTheme({
       },
     },
   },
-});
-
-export default theme; 
+}); 

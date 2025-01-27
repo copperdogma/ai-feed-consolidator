@@ -7,21 +7,59 @@
 2. A Google Cloud Console account
 3. A React + TypeScript project (we used Vite)
 
-## Google Cloud Console Setup
-1. Go to [Google Cloud Console](https://console.cloud.google.com)
+## Google OAuth Configuration
+
+### Google Cloud Console Setup
+1. Go to the [Google Cloud Console](https://console.cloud.google.com)
 2. Create a new project or select an existing one
-3. Enable the Google+ API and Google OAuth2 API
-4. Go to "Credentials" → "Create Credentials" → "OAuth Client ID"
-5. Configure the OAuth consent screen:
-   - Add your app name
-   - Add authorized domains
-   - Select scopes (we used email and profile)
-6. Create OAuth 2.0 Client ID:
-   - Application Type: Web Application
-   - Name: Your app name
-   - Authorized JavaScript Origins: `http://localhost:5173` (frontend)
-   - Authorized Redirect URIs: `http://localhost:3003/auth/google/callback` (backend)
-7. Save your Client ID and Client Secret
+3. Enable the Google+ API
+4. Configure OAuth consent screen
+5. Create OAuth 2.0 credentials:
+   - Application type: Web application
+   - Name: AI Feed Consolidator
+   - Authorized JavaScript origins: 
+     - `http://localhost:5173` (frontend)
+     - `http://localhost:3003` (backend)
+   - Authorized Redirect URIs: `http://localhost:3003/api/auth/google/callback` (backend)
+
+### Server Configuration
+The server uses Passport.js with the Google OAuth2.0 strategy:
+
+```typescript
+passport.use(new GoogleStrategy({
+  clientID: config.googleClientId,
+  clientSecret: config.googleClientSecret,
+  callbackURL: 'http://localhost:3003/api/auth/google/callback',
+}, async (accessToken, refreshToken, profile, done) => {
+  // ... auth logic ...
+}));
+
+// Auth routes
+app.get('/api/auth/google', 
+  passport.authenticate('google', { scope: ['profile', 'email'] })
+);
+
+app.get('/api/auth/google/callback',
+  passport.authenticate('google', {
+    successRedirect: '/',
+    failureRedirect: '/login'
+  })
+);
+```
+
+### Frontend Integration
+The frontend redirects to the Google OAuth endpoint:
+
+```typescript
+<Button
+  variant="contained"
+  color="primary"
+  onClick={() => window.location.href = 'http://localhost:3003/api/auth/google'}
+  startIcon={<GoogleIcon />}
+>
+  Log in with Google
+</Button>
+```
 
 ## Environment Setup
 1. Create a `.env` file in your project root:
@@ -89,7 +127,7 @@ passport.use(
     {
       clientID: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-      callbackURL: 'http://localhost:3003/auth/google/callback',
+      callbackURL: 'http://localhost:3003/api/auth/google/callback',
     },
     async (accessToken, refreshToken, profile, done) => {
       try {
@@ -115,7 +153,7 @@ passport.deserializeUser((user: Express.User, done) => {
 
 // Auth Routes
 app.get(
-  '/auth/google',
+  '/api/auth/google',
   passport.authenticate('google', {
     scope: ['profile', 'email'],
     accessType: 'offline',
@@ -124,7 +162,7 @@ app.get(
 );
 
 app.get(
-  '/auth/google/callback',
+  '/api/auth/google/callback',
   passport.authenticate('google', {
     failureRedirect: 'http://localhost:5173/login',
     successRedirect: 'http://localhost:5173/',

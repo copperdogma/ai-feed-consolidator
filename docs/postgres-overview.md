@@ -100,11 +100,11 @@ initdb -D /usr/local/var/postgresql@14
 brew services start postgresql@14
 
 # Create development database
-createdb dev-ai-feed-consolidator-db
+createdb ai-feed-dev
 ```
 
 ### Connection Details
-- Database: `dev-ai-feed-consolidator-db`
+- Database: `ai-feed-dev`
 - User: System username (no password)
 - Socket: `/tmp`
 - Port: `5432`
@@ -118,7 +118,7 @@ createdb dev-ai-feed-consolidator-db
    - Query execution and visualization
 
 2. **CLI Tools**
-   - `psql dev-ai-feed-consolidator-db` for direct database access
+   - `psql ai-feed-dev` for direct database access
    - Sequelize CLI for migrations
    - See `commands-reference.md` for common commands
 
@@ -197,12 +197,12 @@ Password: (from DB_PASSWORD_PROD)
 -- Kill all connections
 SELECT pg_terminate_backend(pg_stat_activity.pid)
 FROM pg_stat_activity
-WHERE pg_stat_activity.datname = 'dev-ai-feed-consolidator-db'
+WHERE pg_stat_activity.datname = 'ai-feed-dev'
   AND pid <> pg_backend_pid();
 
 -- Drop and recreate
-DROP DATABASE IF EXISTS "dev-ai-feed-consolidator-db";
-CREATE DATABASE "dev-ai-feed-consolidator-db";
+DROP DATABASE IF EXISTS "ai-feed-dev";
+CREATE DATABASE "ai-feed-dev";
 ```
 
 ### Common Tasks

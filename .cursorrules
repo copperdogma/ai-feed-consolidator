@@ -16,8 +16,14 @@ Core Principles:
 Document Structure:
 - docs/spec.md: Requirements contract and success criteria. When resolving spec questions, remove the queston and integrate the answer into the spec.
 - docs/design.md: Technical implementation details and decisions. When updating, including relevant links and rationale for design decisions.
+- docs/commands-reference.md: List of commands and their usage related to this project. Check often before running commands.
 - docs/todo.md: Active tasks, bugs, and future work. Ensure tasks remained organized and prioritized. Completed todos should be moved to the log.md as part of the next milestone. A top section should be reserved for the task we're currently working on.
 - docs/log.md: Project history and milestone notes, newest at top, with each milestone header in format: YYYYMMDD: [Milestone Name]
+
+Critical References:
+- dev db: ai-feed-dev
+- test db: ai-feed-test
+- use cat before psql commands so you regain control of the terminal
 
 Document Format:
 - Use markdown (.md) only
@@ -31,6 +37,7 @@ Document Format:
 
 Programming Guidelines:
 - Default to searching the web for examples of how to do things and useing pre-existing libraries and frameworks when possible.
+- Search the code base to verify your assumptions before acting on them.
 - Cross-reference relevant documentation during development.
 - Use comments to explain non-obvious code logic.
 - When we're brainstorming implementation, suggest both an MVP and "best practices" approach.

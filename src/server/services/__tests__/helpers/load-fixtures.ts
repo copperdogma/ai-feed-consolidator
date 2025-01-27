@@ -1,15 +1,8 @@
-import fs from 'fs/promises';
-import path from 'path';
-import { FeedlyEntry } from '../../feedly';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 
-const FIXTURES_DIR = path.join(__dirname, '..', 'fixtures');
-
-/**
- * Load sample Feedly entries from the fixture data
- * @returns Array of FeedlyEntry objects
- */
-export async function loadFeedlySampleData(): Promise<FeedlyEntry[]> {
-  const filePath = path.join(FIXTURES_DIR, 'feedly-sample-response.json');
-  const fileContent = await fs.readFile(filePath, 'utf-8');
-  return JSON.parse(fileContent) as FeedlyEntry[];
+export function loadFeedlySampleData() {
+  const fixturePath = join(__dirname, '../fixtures/feedly-sample-response.json');
+  const data = readFileSync(fixturePath, 'utf-8');
+  return JSON.parse(data);
 } 

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Card,
   CardContent,
@@ -17,11 +17,15 @@ import {
   Article as ArticleIcon,
   Headphones as HeadphonesIcon,
   Videocam as VideocamIcon,
+  Bookmark as BookmarkIcon,
+  BookmarkBorder as BookmarkBorderIcon,
 } from '@mui/icons-material';
 import { ProcessedFeedItem } from '../server/types/feed';
+import config from '../config';
 
 interface FeedItemCardProps {
   item: ProcessedFeedItem;
+  onRefresh?: () => void;
 }
 
 const getMediaIcon = (type: string) => {
@@ -35,7 +39,58 @@ const getMediaIcon = (type: string) => {
   }
 };
 
-export function FeedItemCard({ item }: FeedItemCardProps) {
+export function FeedItemCard({ item, onRefresh }: FeedItemCardProps) {
+  const [isSaving, setIsSaving] = useState(false);
+  const [isSaved, setIsSaved] = useState(
+    item.metadata?.tags?.some(tag => tag.id.includes('global.saved')) ?? false
+  );
+
+  const toggleSaved = async () => {
+    if (isSaving) return;
+    
+    console.log('Toggling saved status:', { 
+      id: item.externalId, 
+      currentStatus: isSaved,
+      metadata: item.metadata 
+    });
+    
+    setIsSaving(true);
+    try {
+      const togglePath = config.api.toggleSavedPath.replace(':id', item.externalId);
+      const response = await fetch(`${config.serverUrl}${togglePath}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ saved: !isSaved }),
+        credentials: 'include',
+      });
+
+      console.log('Toggle response:', { 
+        ok: response.ok, 
+        status: response.status 
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Error response:', errorData);
+        throw new Error('Failed to toggle saved status');
+      }
+
+      setIsSaved(!isSaved);
+      console.log('Successfully toggled saved status to:', !isSaved);
+      
+      if (onRefresh) {
+        console.log('Refreshing feed items');
+        onRefresh();
+      }
+    } catch (error) {
+      console.error('Error toggling saved status:', error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const openInChatGPT = () => {
     const prompt = `Analyze ${item.url}
 
@@ -197,6 +252,19 @@ Source: ${item.source.name} (${item.source.platform})`;
           <Tooltip title="Analyze with GPT-4">
             <IconButton size="small" onClick={openInChatGPT}>
               <ChatIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title={isSaved ? "Remove from saved" : "Save for later"}>
+            <IconButton 
+              size="small" 
+              onClick={toggleSaved}
+              disabled={isSaving}
+            >
+              {isSaved ? (
+                <BookmarkIcon fontSize="small" />
+              ) : (
+                <BookmarkBorderIcon fontSize="small" />
+              )}
             </IconButton>
           </Tooltip>
         </CardActions>

@@ -26,8 +26,10 @@ const __dirname = dirname(__filename);
 
 // Constants for cleanup
 const CLEANUP_LOCK_ID = 41724;
-const RETRY_DELAY_BASE = 500; // Increased from 200ms to 500ms
-const MAX_LOCK_WAIT = 5000; // Increased from 2s to 5s
+const RESET_LOCK_ID = 41725;
+const MAX_RETRIES = 10;  // Increased from 5
+const RETRY_DELAY_BASE = 200;  // Increased from 100
+const MAX_DELAY = 5000;  // Increased from 2000
 const STATEMENT_TIMEOUT = 5000; // Increased from 2s to 5s
 
 // Tables in dependency order (children first, parents last)
@@ -38,11 +40,24 @@ const TABLES_IN_ORDER = [
   'users'
 ] as const;
 
+// Helper function to acquire an advisory lock
+async function acquireAdvisoryLock(client: PoolClient, lockId: number): Promise<boolean> {
+  const result = await client.query('SELECT pg_try_advisory_lock($1)', [lockId]);
+  return result.rows[0].pg_try_advisory_lock;
+}
+
+// Helper function to release an advisory lock
+async function releaseAdvisoryLock(client: PoolClient, lockId: number): Promise<void> {
+  await client.query('SELECT pg_advisory_unlock($1)', [lockId]);
+}
+
 // Helper function to wait with exponential backoff and jitter
-async function wait(attempt: number): Promise<void> {
-  const delay = Math.min(RETRY_DELAY_BASE * Math.pow(1.5, attempt), 2000); // Reduced max delay and exponential factor
-  const jitter = Math.random() * 50; // Reduced jitter range
-  await new Promise(resolve => setTimeout(resolve, delay + jitter));
+async function waitWithBackoff(attempt: number): Promise<void> {
+  const delay = Math.min(
+    RETRY_DELAY_BASE * Math.pow(2, attempt) + Math.random() * 1000,
+    MAX_DELAY
+  );
+  await new Promise(resolve => setTimeout(resolve, delay));
 }
 
 // Track if database has been initialized
@@ -54,6 +69,9 @@ beforeAll(async () => {
     await resetDatabase();
     isDatabaseInitialized = true;
   }
+  // Initialize LoginHistoryService
+  const { LoginHistoryService } = await import('../services/login-history');
+  LoginHistoryService.initialize(pool);
 });
 
 // Cleanup after all tests
@@ -66,9 +84,16 @@ afterAll(async () => {
 
 // Create a test user for authentication tests
 export async function createTestUser(): Promise<User> {
-  try {
-    return await withTransaction(async (client: PoolClient) => {
-      await client.query('SET TRANSACTION ISOLATION LEVEL READ COMMITTED'); // Changed from REPEATABLE READ for better concurrency
+  let client: PoolClient | null = null;
+  let retries = 0;
+  const maxRetries = 3;
+  const testGoogleId = `test-google-id-${Date.now()}`;
+
+  while (retries < maxRetries) {
+    try {
+      client = await pool.connect();
+      await client.query('BEGIN');
+      await client.query('SET TRANSACTION ISOLATION LEVEL READ COMMITTED');
 
       // Create new user with preferences using UPSERT
       const result = await client.query<User>(
@@ -80,10 +105,11 @@ export async function createTestUser(): Promise<User> {
            display_name = EXCLUDED.display_name,
            avatar_url = EXCLUDED.avatar_url
          RETURNING *`,
-        ['test-google-id', 'test@example.com', 'Test User', 'https://example.com/picture.jpg']
+        [testGoogleId, 'test@example.com', 'Test User', 'https://example.com/picture.jpg']
       );
 
       const user = result.rows[0];
+      console.log('Created test user:', user);
 
       // Create or update user preferences
       await client.query(
@@ -98,12 +124,39 @@ export async function createTestUser(): Promise<User> {
         [user.id, 'light', true, 'en', 1]
       );
 
+      // Verify the user exists in this transaction
+      const verifyResult = await client.query<User>('SELECT * FROM users WHERE id = $1', [user.id]);
+      if (verifyResult.rows.length === 0) {
+        throw new Error(`Test user ${user.id} was not created successfully`);
+      }
+      console.log('Verified test user exists:', verifyResult.rows[0]);
+
+      await client.query('COMMIT');
       return user;
-    });
-  } catch (error) {
-    console.error('Error creating test user:', error);
-    throw error;
+
+    } catch (error) {
+      console.error(`Error creating test user (attempt ${retries + 1}/${maxRetries}):`, error);
+      if (client) {
+        try {
+          await client.query('ROLLBACK');
+        } catch (rollbackError) {
+          console.error('Error during rollback:', rollbackError);
+        }
+      }
+      if (retries < maxRetries - 1) {
+        retries++;
+        await waitWithBackoff(retries);
+      } else {
+        throw error;
+      }
+    } finally {
+      if (client) {
+        client.release();
+      }
+    }
   }
+
+  throw new Error(`Failed to create test user after ${maxRetries} attempts`);
 }
 
 // Verify that a test user exists
@@ -117,7 +170,7 @@ export async function verifyTestUser(userId: number): Promise<User | null> {
 
 // Create an authenticated agent for testing protected routes
 export async function createAuthenticatedAgent(): Promise<ReturnType<typeof supertest.agent>> {
-  const app = createApp();
+  const app = await createApp();
   const agent = supertest.agent(app);
   const testUser = await createTestUser();
 
@@ -137,129 +190,171 @@ export async function createAuthenticatedAgent(): Promise<ReturnType<typeof supe
   return agent;
 }
 
-// Optimized database cleanup function
-export async function cleanupDatabase() {
-  let client: PoolClient | null = null;
+// Utility function to get a new client with retries
+async function getClient(maxRetries = 3): Promise<PoolClient> {
   let retries = 0;
-  const maxRetries = 2; // Reduced from 3 to 2
-
   while (retries < maxRetries) {
     try {
-      if (!client) {
-        client = await pool.connect();
-      }
-
-      // Try to acquire the cleanup lock with timeout
-      const lockResult = await client.query(
-        `SELECT pg_try_advisory_lock($1) as acquired, 
-                pg_try_advisory_lock_shared($2) as shared_acquired`,
-        [CLEANUP_LOCK_ID, CLEANUP_LOCK_ID + 1]
-      );
-
-      if (!lockResult.rows[0].acquired) {
-        if (lockResult.rows[0].shared_acquired) {
-          // If we got the shared lock but not the exclusive lock, someone else is cleaning
-          await client.query('SELECT pg_advisory_unlock_shared($1)', [CLEANUP_LOCK_ID + 1]);
-          await wait(retries);
-          continue;
-        }
-        // Try to get the lock with a timeout
-        await client.query(`SET LOCAL lock_timeout = '${MAX_LOCK_WAIT}ms'`);
-        await client.query('SELECT pg_advisory_lock($1)', [CLEANUP_LOCK_ID]);
-      }
-
-      // Start a new transaction with optimized settings
-      await client.query('BEGIN');
-      await client.query(`SET LOCAL statement_timeout = ${STATEMENT_TIMEOUT}`);
-      await client.query(`SET LOCAL lock_timeout = ${MAX_LOCK_WAIT}`);
-      await client.query(`SET LOCAL idle_in_transaction_session_timeout = ${STATEMENT_TIMEOUT * 2}`);
-      await client.query('SET LOCAL transaction_isolation = \'read committed\'');
-      await client.query('SET session_replication_role = replica'); // Disable triggers and foreign keys
-
-      // Clean tables in parallel using Promise.all
-      await Promise.all(TABLES_IN_ORDER.map(async (table) => {
-        try {
-          await client?.query(`TRUNCATE TABLE "${table}" CASCADE`);
-          console.log(`Cleaned table: ${table}`);
-        } catch (error: any) {
-          if (error.code === '55P03') { // Lock not available
-            throw error; // Let the outer try-catch handle it
-          }
-          console.error(`Error cleaning table ${table}:`, error);
-          throw error;
-        }
-      }));
-
-      await client.query('SET session_replication_role = default');
-      await client.query('COMMIT');
-      console.log('Database cleanup completed successfully');
-      return;
-
-    } catch (error: any) {
-      console.error('Error during cleanup:', error);
-      
-      if (client) {
-        try {
-          await client.query('ROLLBACK').catch(() => {});
-          if (error.code === '25P02') { // Current transaction is aborted
-            client.release();
-            client = null;
-          }
-        } catch (rollbackError) {
-          console.error('Error during rollback:', rollbackError);
-        }
-      }
-      
-      if (retries < maxRetries - 1) {
-        retries++;
-        console.log(`Retrying cleanup (attempt ${retries + 1}/${maxRetries})...`);
-        await wait(retries);
-      } else {
+      const client = await pool.connect();
+      return client;
+    } catch (error) {
+      console.error(`Failed to get client (attempt ${retries + 1}/${maxRetries}):`, error);
+      retries++;
+      if (retries === maxRetries) {
         throw error;
       }
-    } finally {
-      if (client) {
-        try {
-          await client.query('SELECT pg_advisory_unlock($1)', [CLEANUP_LOCK_ID]).catch(() => {});
-          await client.query('SELECT pg_advisory_unlock_shared($1)', [CLEANUP_LOCK_ID + 1]).catch(() => {});
-          client.release();
-        } catch (error) {
-          console.error('Error releasing cleanup resources:', error);
-        }
-      }
+      await waitWithBackoff(retries);
     }
   }
+  throw new Error('Failed to get client after max retries');
+}
+
+// Helper function to acquire an advisory lock with retries
+async function acquireAdvisoryLockWithRetries(
+  client: PoolClient,
+  lockId: number
+): Promise<boolean> {
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    const result = await client.query(
+      'SELECT pg_try_advisory_lock($1) as acquired',
+      [lockId]
+    );
+    
+    if (result.rows[0].acquired) {
+      console.log(`Successfully acquired lock ${lockId} on attempt ${attempt + 1}`);
+      return true;
+    }
+
+    console.log(`Failed to acquire lock ${lockId}, attempt ${attempt + 1}/${MAX_RETRIES}, waiting before retry...`);
+    await waitWithBackoff(attempt);
+  }
+
+  return false;
 }
 
 // Reset database function (used in beforeAll)
 export async function resetDatabase(): Promise<void> {
   let client: PoolClient | null = null;
+  let lockAcquired = false;
   
   try {
-    client = await pool.connect();
+    // Get a new client
+    client = await getClient();
     
-    // Start transaction
-    await client.query('BEGIN');
+    // Set longer timeouts for schema operations
+    await client.query('SET statement_timeout = 300000'); // 5 minutes
+    await client.query('SET lock_timeout = 300000'); // 5 minutes
+    await client.query('SET idle_in_transaction_session_timeout = 300000'); // 5 minutes
     
-    // Clean existing tables
-    await cleanupDatabase();
+    // Try to acquire the reset lock with retries
+    console.log('Attempting to acquire reset lock...');
+    lockAcquired = await acquireAdvisoryLockWithRetries(client, RESET_LOCK_ID);
+    if (!lockAcquired) {
+      throw new Error('Failed to acquire reset lock after retries');
+    }
+    
+    // Clean tables one at a time without a transaction
+    for (const table of TABLES_IN_ORDER) {
+      try {
+        await client.query(`TRUNCATE TABLE "${table}" CASCADE`);
+        console.log(`Cleaned table: ${table}`);
+      } catch (error) {
+        console.error(`Error cleaning table ${table}:`, error);
+        throw error;
+      }
+    }
     
     // Initialize database with tables
     await initializeDatabase();
-    
-    // Commit transaction
-    await client.query('COMMIT');
-    console.log('Database reset and initialized successfully');
+    console.log('Database reset completed successfully');
     
   } catch (error) {
-    console.error('Error during database reset:', error);
-    if (client) {
-      await client.query('ROLLBACK');
-    }
+    console.error(`Error during database reset:`, error);
     throw error;
   } finally {
+    // Release lock if we acquired it
+    if (client && lockAcquired) {
+      try {
+        await releaseAdvisoryLock(client, RESET_LOCK_ID);
+        console.log('Released reset lock');
+      } catch (error) {
+        console.error('Error releasing reset lock:', error);
+      }
+    }
+    
+    // Release client if we have one
     if (client) {
-      client.release();
+      try {
+        client.release();
+        console.log('Released database client');
+      } catch (error) {
+        console.error('Error releasing client:', error);
+      }
+      client = null;
+    }
+  }
+}
+
+// Cleanup database function (used in beforeEach)
+export async function cleanupDatabase(): Promise<void> {
+  let client: PoolClient | null = null;
+  let lockAcquired = false;
+  
+  try {
+    // Get a new client
+    client = await getClient();
+    
+    // Set longer timeouts for schema operations
+    await client.query('SET statement_timeout = 300000'); // 5 minutes
+    await client.query('SET lock_timeout = 300000'); // 5 minutes
+    await client.query('SET idle_in_transaction_session_timeout = 300000'); // 5 minutes
+    
+    // Try to acquire the cleanup lock with retries
+    console.log('Attempting to acquire cleanup lock...');
+    lockAcquired = await acquireAdvisoryLockWithRetries(client, CLEANUP_LOCK_ID);
+    if (!lockAcquired) {
+      throw new Error('Failed to acquire cleanup lock after retries');
+    }
+    
+    // Clean tables one at a time without a transaction
+    for (const table of TABLES_IN_ORDER) {
+      try {
+        await client.query(`TRUNCATE TABLE "${table}" CASCADE`);
+        console.log(`Cleaned table: ${table}`);
+      } catch (error) {
+        console.error(`Error cleaning table ${table}:`, error);
+        throw error;
+      }
+    }
+    
+    await client.query('DELETE FROM feed_items');
+    await client.query('DELETE FROM feed_configs');
+    
+    console.log('Database cleanup completed successfully');
+    
+  } catch (error) {
+    console.error(`Error during database cleanup:`, error);
+    throw error;
+  } finally {
+    // Release lock if we acquired it
+    if (client && lockAcquired) {
+      try {
+        await releaseAdvisoryLock(client, CLEANUP_LOCK_ID);
+        console.log('Released cleanup lock');
+      } catch (error) {
+        console.error('Error releasing cleanup lock:', error);
+      }
+    }
+    
+    // Release client if we have one
+    if (client) {
+      try {
+        client.release();
+        console.log('Released database client');
+      } catch (error) {
+        console.error('Error releasing client:', error);
+      }
+      client = null;
     }
   }
 }

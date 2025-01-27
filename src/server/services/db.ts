@@ -9,33 +9,42 @@ export interface User {
   email: string;
   display_name: string;
   avatar_url: string | null;
+  feedly_access_token: string | null;
+  feedly_refresh_token: string | null;
+  feedly_user_id: string | null;
   created_at: Date;
   updated_at: Date;
 }
 
 export interface UserPreferences {
+  id: number;
   user_id: number;
-  theme: string;
-  email_notifications: boolean;
-  content_language: string;
-  summary_level: number;
+  preference_key: string;
+  preference_value: any;
   created_at: Date;
   updated_at: Date;
 }
 
 // Create a connection pool with appropriate settings for testing
 export const pool = new Pool({
-  connectionString: config.databaseUrl,
+  connectionString: config.database.url,
   max: 10, // Reduced from 20 to prevent too many concurrent connections
-  idleTimeoutMillis: 30000, // Close idle clients after 30 seconds
-  connectionTimeoutMillis: 5000, // Increased from 2000ms to 5000ms
-  statement_timeout: 30000, // 30 seconds statement timeout
-  query_timeout: 30000, // 30 seconds query timeout
+  idleTimeoutMillis: 60000, // Increased to 60 seconds
+  connectionTimeoutMillis: 10000, // Increased to 10 seconds
+  statement_timeout: 60000, // Increased to 60 seconds
+  query_timeout: 60000, // Increased to 60 seconds
+  allowExitOnIdle: true, // Allow the pool to clean up on process exit
 });
 
 // Add an error handler for the pool
 pool.on('error', (err, client) => {
   console.error('Unexpected error on idle client', err);
+  // Attempt to close the client gracefully
+  try {
+    client.release(true); // Force release
+  } catch (releaseErr) {
+    console.error('Error releasing client after pool error:', releaseErr);
+  }
 });
 
 // Constants for transaction retries
@@ -195,112 +204,240 @@ export async function getUserPreferences(userId: number): Promise<UserPreference
 
 export async function updateUserPreferences(
   userId: number,
-  preferences: Partial<UserPreferences>
-): Promise<UserPreferences | null> {
+  preferences: Record<string, any>
+): Promise<UserPreferences[]> {
   return withTransaction(async (client) => {
-    const updates: string[] = [];
-    const values: any[] = [];
-    let paramCount = 1;
-
-    if (preferences.theme !== undefined) {
-      updates.push(`theme = $${paramCount}`);
-      values.push(preferences.theme);
-      paramCount++;
-    }
-
-    if (preferences.email_notifications !== undefined) {
-      updates.push(`email_notifications = $${paramCount}`);
-      values.push(preferences.email_notifications);
-      paramCount++;
-    }
-
-    if (preferences.content_language !== undefined) {
-      updates.push(`content_language = $${paramCount}`);
-      values.push(preferences.content_language);
-      paramCount++;
-    }
-
-    if (preferences.summary_level !== undefined) {
-      updates.push(`summary_level = $${paramCount}`);
-      values.push(preferences.summary_level);
-      paramCount++;
-    }
-
-    if (updates.length === 0) {
-      return null;
-    }
-
-    values.push(userId);
-    const result = await client.query<UserPreferences>(
-      `UPDATE user_preferences 
-       SET ${updates.join(', ')}, updated_at = NOW()
-       WHERE user_id = $${paramCount}
-       RETURNING *`,
-      values
+    const results = await Promise.all(
+      Object.entries(preferences).map(([key, value]) =>
+        client.query<UserPreferences>(
+          `INSERT INTO user_preferences (user_id, preference_key, preference_value)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (user_id, preference_key) DO UPDATE
+           SET preference_value = $3, updated_at = NOW()
+           RETURNING *`,
+          [userId, key, JSON.stringify(value)]
+        )
+      )
     );
 
-    return result.rows[0] || null;
+    return results.map(r => r.rows[0]);
   });
 }
 
 // Function to initialize database schema
 export async function initializeDatabase(): Promise<void> {
-  return withTransaction(async (client) => {
-    // Create users table
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS users (
-        id SERIAL PRIMARY KEY,
-        google_id TEXT UNIQUE NOT NULL,
-        email TEXT NOT NULL,
-        display_name TEXT NOT NULL,
-        avatar_url TEXT,
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
+  const client = await pool.connect();
+  try {
+    // Set longer timeouts for schema operations
+    await client.query('SET statement_timeout = 120000'); // 2 minutes
+    await client.query('SET lock_timeout = 120000'); // 2 minutes
+    
+    // Drop all indexes first to avoid conflicts
+    const dropIndexes = [
+      'idx_users_google_id',
+      'idx_sessions_expire',
+      'idx_login_history_user_id',
+      'idx_login_history_created_at',
+      'idx_login_history_login_time',
+      'idx_feed_configs_user_id',
+      'idx_feed_items_source',
+      'idx_feed_items_published_at'
+    ];
 
-    // Create user_preferences table
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS user_preferences (
-        user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-        theme TEXT NOT NULL DEFAULT 'light',
-        email_notifications BOOLEAN NOT NULL DEFAULT true,
-        content_language TEXT NOT NULL DEFAULT 'en',
-        summary_level INTEGER NOT NULL DEFAULT 1,
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
+    for (const index of dropIndexes) {
+      try {
+        await client.query(`DROP INDEX IF EXISTS ${index}`);
+      } catch (error) {
+        console.warn(`Failed to drop index ${index}:`, error);
+        // Continue with other operations
+      }
+    }
 
-    // Create sessions table
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS sessions (
-        sid TEXT PRIMARY KEY,
-        sess JSON NOT NULL,
-        expire TIMESTAMP WITH TIME ZONE NOT NULL
-      )
-    `);
+    // Start transaction for table operations
+    await client.query('BEGIN');
+    try {
+      // Drop and recreate sessions table to ensure clean state
+      await client.query('DROP TABLE IF EXISTS sessions CASCADE');
 
-    // Create login_history table with additional columns
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS login_history (
-        id SERIAL PRIMARY KEY,
-        user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-        success BOOLEAN NOT NULL,
-        ip_address TEXT,
-        user_agent TEXT,
-        login_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-        failure_reason TEXT,
-        request_path TEXT,
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
+      // Create users table first
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS users (
+          id SERIAL PRIMARY KEY,
+          google_id TEXT UNIQUE NOT NULL,
+          email TEXT NOT NULL,
+          display_name TEXT NOT NULL,
+          avatar_url TEXT,
+          feedly_access_token TEXT,
+          feedly_refresh_token TEXT,
+          feedly_user_id TEXT,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
 
-    // Create indexes for performance
-    await client.query('CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id)');
-    await client.query('CREATE INDEX IF NOT EXISTS idx_sessions_expire ON sessions(expire)');
-    await client.query('CREATE INDEX IF NOT EXISTS idx_login_history_user_id ON login_history(user_id)');
-    await client.query('CREATE INDEX IF NOT EXISTS idx_login_history_created_at ON login_history(created_at)');
-    await client.query('CREATE INDEX IF NOT EXISTS idx_login_history_login_time ON login_history(login_time)');
-  });
-} 
+      // Create user_preferences table
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS user_preferences (
+          user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+          theme TEXT NOT NULL DEFAULT 'light',
+          email_notifications BOOLEAN NOT NULL DEFAULT true,
+          content_language TEXT NOT NULL DEFAULT 'en',
+          summary_level INTEGER NOT NULL DEFAULT 1,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      // Create sessions table
+      await client.query(`
+        CREATE TABLE sessions (
+          sid TEXT PRIMARY KEY,
+          sess JSON NOT NULL,
+          expire TIMESTAMP(6) WITH TIME ZONE NOT NULL
+        )
+      `);
+
+      // Create login_history table
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS login_history (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+          success BOOLEAN NOT NULL,
+          ip_address TEXT,
+          user_agent TEXT,
+          login_time TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          failure_reason TEXT,
+          request_path TEXT,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      // Create feed_configs table
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS feed_configs (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+          feed_url TEXT NOT NULL,
+          title TEXT,
+          description TEXT,
+          site_url TEXT,
+          icon_url TEXT,
+          last_fetched_at TIMESTAMP WITH TIME ZONE,
+          error_count INTEGER NOT NULL DEFAULT 0,
+          is_active BOOLEAN NOT NULL DEFAULT true,
+          fetch_interval_minutes INTEGER NOT NULL DEFAULT 60,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      // Create feed_items table
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS feed_items (
+          id SERIAL PRIMARY KEY,
+          source_id TEXT NOT NULL,
+          source_type TEXT NOT NULL,
+          title TEXT NOT NULL,
+          author TEXT,
+          content TEXT,
+          summary TEXT,
+          url TEXT NOT NULL,
+          published_at TIMESTAMP WITH TIME ZONE NOT NULL,
+          raw_metadata JSONB,
+          feed_config_id INTEGER REFERENCES feed_configs(id) ON DELETE CASCADE,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(source_type, source_id)
+        )
+      `);
+
+      // Create item_states table
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS item_states (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          feed_item_id INTEGER NOT NULL REFERENCES feed_items(id) ON DELETE CASCADE,
+          is_read BOOLEAN DEFAULT false,
+          is_saved BOOLEAN DEFAULT false,
+          last_synced_at TIMESTAMP WITH TIME ZONE,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(user_id, feed_item_id)
+        )
+      `);
+
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    }
+
+    // Create indexes outside of transaction, one at a time
+    const createIndexes = [
+      'CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id)',
+      'CREATE INDEX IF NOT EXISTS idx_sessions_expire ON sessions(expire)',
+      'CREATE INDEX IF NOT EXISTS idx_login_history_user_id ON login_history(user_id)',
+      'CREATE INDEX IF NOT EXISTS idx_login_history_created_at ON login_history(created_at)',
+      'CREATE INDEX IF NOT EXISTS idx_login_history_login_time ON login_history(login_time)',
+      'CREATE INDEX IF NOT EXISTS idx_feed_configs_user_id ON feed_configs(user_id)',
+      'CREATE INDEX IF NOT EXISTS idx_feed_items_source ON feed_items(source_type, source_id)',
+      'CREATE INDEX IF NOT EXISTS idx_feed_items_feed_config ON feed_items(feed_config_id) WHERE feed_config_id IS NOT NULL',
+      'CREATE INDEX IF NOT EXISTS idx_item_states_user ON item_states(user_id)',
+      'CREATE INDEX IF NOT EXISTS idx_item_states_feed_item ON item_states(feed_item_id)',
+      'CREATE INDEX IF NOT EXISTS idx_item_states_user_saved ON item_states(user_id) WHERE is_saved = true',
+      'CREATE INDEX IF NOT EXISTS idx_feed_items_published_at ON feed_items(published_at DESC)'
+    ];
+
+    for (const createIndex of createIndexes) {
+      try {
+        // Check if column exists first
+        const colExists = await client.query(`
+          SELECT EXISTS (
+            SELECT 1 
+            FROM information_schema.columns 
+            WHERE table_name='feed_items' 
+            AND column_name='feed_config_id'
+          )
+        `);
+        
+        if (colExists.rows[0].exists) {
+          await client.query(createIndex);
+        }
+      } catch (error) {
+        console.warn(`Failed to create index with query ${createIndex}:`, error);
+        // Continue with other operations
+      }
+    }
+  } finally {
+    client.release();
+  }
+}
+
+async function validateSchema() {
+  const requiredColumns = {
+    feed_items: ['feed_config_id'],
+    feed_configs: ['user_id', 'feed_url']
+  };
+
+  for (const [table, columns] of Object.entries(requiredColumns)) {
+    const { rows } = await pool.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = $1
+    `, [table]);
+
+    const existingColumns = rows.map(r => r.column_name);
+    
+    for (const col of columns) {
+      if (!existingColumns.includes(col)) {
+        throw new Error(`Missing required column ${col} in table ${table}`);
+      }
+    }
+  }
+}
+
+// Call during service initialization
+validateSchema().catch(err => {
+  console.error('Schema validation failed:', err);
+  process.exit(1);
+}); 

@@ -165,6 +165,40 @@ Requirements:
 - Activity tracking
 - Full-text search
 
+### Database Migration Strategy
+The project uses Sequelize migrations for database schema management:
+
+1. **Migration Framework**
+   - Sequelize CLI for migration management
+   - TypeScript-based migrations for type safety
+   - Reversible migrations with up/down methods
+   - Automated timestamp handling
+
+2. **Migration Structure**
+   - Chronological ordering with timestamps
+   - One migration per logical change
+   - Comprehensive schema documentation
+   - Explicit foreign key relationships
+
+3. **Key Migrations**
+   - Authentication tables (users, sessions)
+   - Feed management (items, configs)
+   - Content processing (summaries, states)
+   - Activity tracking (login history)
+
+4. **Migration Benefits**
+   - Type safety through Sequelize
+   - Automated rollback capability
+   - Consistent naming conventions
+   - Documentation preservation
+   - Better maintainability
+
+5. **Best Practices**
+   - Test migrations in development
+   - Backup before production deployment
+   - Document complex changes
+   - Maintain change history
+
 ### API Design
 - RESTful endpoints for:
   - Platform integration
@@ -425,15 +459,12 @@ The application uses Google OAuth 2.0 for authentication, providing a secure and
    - Regular session secret rotation
 
 ### Data Flow
-1. User clicks "Sign in with Google"
-2. Frontend redirects to `/auth/google`
-3. Backend initiates OAuth flow
-4. Google displays consent screen
-5. User approves access
-6. Google redirects to callback URL
-7. Backend creates session
-8. User redirected to frontend
-9. Frontend fetches user data
+1. User clicks "Log in with Google" button
+2. Frontend redirects to `/api/auth/google`
+3. Backend initiates OAuth flow with Google
+4. Google redirects to `/api/auth/google/callback` with auth code
+5. Backend exchanges code for tokens and creates/updates user
+6. User is redirected back to frontend with session cookie
 
 ### Future Enhancements
 1. **Database Integration**
@@ -457,30 +488,72 @@ The application uses Google OAuth 2.0 for authentication, providing a secure and
 
 ## Feed Service Implementations
 
-### Feedly
+### RSS Feed Management
+The application directly manages RSS feeds without relying on third-party aggregators. This provides more control and flexibility while avoiding enterprise API limitations.
 
-#### API Response Structure
+#### Core Components
 
-The Feedly API returns an array of feed items with the following structure:
+1. Feed Management
+   - Manual feed addition/removal
+   - Feed validation and health checks
+   - Feed metadata storage
+   - Feed polling system
+   - Optional OPML import support (future)
 
+2. Feed Processing
+   - Regular feed polling (configurable intervals)
+   - Content deduplication
+   - HTML content extraction
+   - Media detection and metadata extraction
+
+3. Feed Storage
+   - Feed configuration storage
+   - Item persistence
+   - Read/unread state tracking
+   - Local save/bookmark functionality
+
+#### Feed Item Structure
 Required fields:
 - `id`: Unique identifier for the item
+- `source_id`: Original item ID (e.g., GUID)
+- `source_type`: Feed source type (e.g., "rss")
 - `title`: Article title
 - `content`: Full article content (HTML)
 - `summary`: Brief content summary
 - `author`: Content author
-- `published`: Publication timestamp
-- `origin`: Source information including title and URL
-- `keywords`: Topic tags array
-- `categories`: User-defined categories
-- `tags`: System tags (e.g. "read", "saved")
+- `published_at`: Publication timestamp
+- `url`: Original article URL
+- `read`: Boolean indicating read status
+- `saved`: Boolean indicating saved status
 
 Optional fields:
-- `canonicalUrl`: Original article URL
 - `language`: Content language code (e.g. "en")
-- `readTime`: Estimated reading time
-- `visual`: Image metadata including URL and dimensions
-- `engagement`: Engagement metrics
-- `engagementRate`: Normalized engagement score
+- `read_time`: Estimated reading time
+- `media`: Array of media items (images, videos)
+- `topics`: Extracted topic tags
 
-This structure will need to be normalized into our common feed item format for consistent processing across different feed sources. 
+#### Implementation Details
+
+1. Feed Polling
+   - Background job runs every 5 minutes
+   - Checks for feeds due for update
+   - Configurable per-feed polling intervals
+   - Error tracking and health monitoring
+
+2. Content Processing
+   - HTML sanitization and cleanup
+   - Media extraction and metadata
+   - Content type detection
+   - Language detection
+
+3. Error Handling
+   - Feed validation on addition
+   - Retry logic for failed fetches
+   - Error count tracking
+   - Feed health monitoring
+
+4. Performance Optimization
+   - Efficient polling scheduling
+   - Content deduplication
+   - Conditional fetching
+   - Response caching 

@@ -30,20 +30,27 @@ export class ContentProcessor {
    * Process a feed item to extract key information
    */
   async processFeedItem(feedItem: FeedItem): Promise<ProcessedFeedItem> {
-    const content = this.extractContent(feedItem);
-    if (!content || content.trim() === '') {
-      throw new ContentProcessingError('No content available for processing');
-    }
-
     try {
-      const summary = await this.openai.createSummary(content);
-      return {
-        ...feedItem,
-        ...summary,
-        processedAt: new Date(),
-      };
+      const content = this.extractContent(feedItem);
+      if (!content || content.trim() === '') {
+        throw new ContentProcessingError('No content available for processing');
+      }
+
+      try {
+        const summary = await this.openai.createSummary(content);
+        return {
+          ...feedItem,
+          ...summary,
+          processedAt: new Date(),
+        };
+      } catch (error) {
+        throw new ContentProcessingError('Failed to generate summary', error);
+      }
     } catch (error) {
-      throw new ContentProcessingError('Failed to process feed item');
+      if (error instanceof ContentProcessingError) {
+        throw error;
+      }
+      throw new ContentProcessingError('Failed to process feed item', error);
     }
   }
 
@@ -74,11 +81,8 @@ export class ContentProcessor {
    */
   private cleanContent(content: string): string {
     return content
-      // Remove HTML tags
-      .replace(/<[^>]*>/g, '')
-      // Replace multiple whitespace with single space
-      .replace(/\s+/g, ' ')
-      // Trim whitespace
+      .replace(/<[^>]*>/g, '') // Remove HTML tags
+      .replace(/\s+/g, ' ') // Normalize whitespace
       .trim();
   }
 

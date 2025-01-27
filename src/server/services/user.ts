@@ -12,36 +12,64 @@ interface CreateUserData {
 
 interface UserProfile {
   user: User;
-  preferences: UserPreferences;
+  preferences: UserPreferences[];
 }
 
 export class UserService {
   private static async createUserWithPreferences(
     client: PoolClient,
     userData: CreateUserData
-  ): Promise<{ user: User; preferences: UserPreferences }> {
+  ): Promise<{ user: User; preferences: UserPreferences[] }> {
     // Create user
     const userResult = await client.query<User>(
       `INSERT INTO users (google_id, email, display_name, avatar_url)
        VALUES ($1, $2, $3, $4)
        RETURNING *`,
-      [userData.googleId, userData.email, userData.displayName, userData.avatarUrl || null]
+      [
+        userData.googleId,
+        userData.email,
+        userData.displayName,
+        userData.avatarUrl || null
+      ]
     );
 
     const user = userResult.rows[0];
 
     // Create default preferences
-    const preferences = await client.query<UserPreferences>(
-      `INSERT INTO user_preferences (user_id, theme, email_notifications, content_language, summary_level)
-       VALUES ($1, 'light', true, 'en', 1)
-       RETURNING *`,
-      [user.id]
-    ).then(result => result.rows[0]);
+    const defaultPreferences = {
+      theme: 'light',
+      email_notifications: true,
+      content_language: 'en',
+      summary_level: 1
+    };
 
-    return { user, preferences };
+    // Insert preferences as a single row
+    const preferencesResult = await client.query<UserPreferences>(
+      `INSERT INTO user_preferences (
+        user_id, 
+        theme, 
+        email_notifications, 
+        content_language, 
+        summary_level
+      )
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING *`,
+      [
+        user.id,
+        defaultPreferences.theme,
+        defaultPreferences.email_notifications,
+        defaultPreferences.content_language,
+        defaultPreferences.summary_level
+      ]
+    );
+
+    return { 
+      user, 
+      preferences: [preferencesResult.rows[0]]
+    };
   }
 
-  static async findOrCreateUser(userData: CreateUserData): Promise<{ user: User; preferences: UserPreferences }> {
+  static async findOrCreateUser(userData: CreateUserData): Promise<{ user: User; preferences: UserPreferences[] }> {
     return await withTransaction(async (client) => {
       // First check if user exists without locking
       const existingUser = await client.query<User>(
@@ -54,7 +82,7 @@ export class UserService {
         const preferences = await client.query<UserPreferences>(
           'SELECT * FROM user_preferences WHERE user_id = $1',
           [existingUser.id]
-        ).then(result => result.rows[0]);
+        ).then(result => result.rows);
 
         return { user: existingUser, preferences };
       }
@@ -74,7 +102,7 @@ export class UserService {
         const preferences = await client.query<UserPreferences>(
           'SELECT * FROM user_preferences WHERE user_id = $1',
           [doubleCheck.id]
-        ).then(result => result.rows[0]);
+        ).then(result => result.rows);
 
         return { user: doubleCheck, preferences };
       }
@@ -101,9 +129,11 @@ export class UserService {
     return result.rows[0] || null;
   }
 
-  static async findOrCreateGoogleUser(profile: Profile): Promise<{
+  static async findOrCreateGoogleUser(
+    profile: Profile
+  ): Promise<{
     user: User;
-    preferences: UserPreferences;
+    preferences: UserPreferences[];
   }> {
     return await withTransaction(async (client) => {
       // First check if user exists without locking
@@ -158,9 +188,9 @@ export class UserService {
         'SELECT * FROM user_preferences WHERE user_id = $1',
         [user.id]
       );
-      const preferences = preferencesResult.rows[0];
+      const preferences = preferencesResult.rows;
       
-      if (!preferences) {
+      if (!preferences.length) {
         throw new Error(`User preferences not found for user ${user.id}`);
       }
 
@@ -194,7 +224,7 @@ export class UserService {
 
       return {
         user,
-        preferences: prefsResult.rows[0]
+        preferences: prefsResult.rows
       };
     });
   }
@@ -228,10 +258,22 @@ export class UserService {
         };
 
         const result = await client.query<UserPreferences>(
-          `INSERT INTO user_preferences (user_id, theme, email_notifications, content_language, summary_level)
-           VALUES ($1, $2, $3, $4, $5)
-           RETURNING *`,
-          [userId, defaultPrefs.theme, defaultPrefs.email_notifications, defaultPrefs.content_language, defaultPrefs.summary_level]
+          `INSERT INTO user_preferences (
+            user_id, 
+            theme, 
+            email_notifications, 
+            content_language, 
+            summary_level
+          )
+          VALUES ($1, $2, $3, $4, $5)
+          RETURNING *`,
+          [
+            userId,
+            defaultPrefs.theme,
+            defaultPrefs.email_notifications,
+            defaultPrefs.content_language,
+            defaultPrefs.summary_level
+          ]
         );
         return result.rows[0];
       }
@@ -251,5 +293,52 @@ export class UserService {
 
       return result.rows[0];
     });
+  }
+
+  static async updateUser(userId: number, updates: Partial<User>): Promise<User | null> {
+    return await withTransaction(async (client) => {
+      const updateFields = Object.keys(updates).map((key, i) => `${key} = $${i + 2}`);
+      const updateValues = Object.values(updates);
+      updateValues.unshift(userId); // Add userId as first parameter
+
+      const result = await client.query<User>(
+        `UPDATE users 
+         SET ${updateFields.join(', ')}, updated_at = NOW()
+         WHERE id = $1
+         RETURNING *`,
+        updateValues
+      );
+
+      return result.rows[0] || null;
+    });
+  }
+
+  static async findById(id: number): Promise<User | null> {
+    const result = await pool.query<User>(
+      'SELECT * FROM users WHERE id = $1',
+      [id]
+    );
+    return result.rows[0] || null;
+  }
+
+  static async updateById(id: number, data: Partial<User>): Promise<User | null> {
+    const setClauses: string[] = [];
+    const values: any[] = [];
+    let paramIndex = 1;
+
+    Object.entries(data).forEach(([key, value]) => {
+      setClauses.push(`${key} = $${paramIndex}`);
+      values.push(value);
+      paramIndex++;
+    });
+
+    values.push(id);
+
+    const result = await pool.query<User>(
+      `UPDATE users SET ${setClauses.join(', ')} WHERE id = $${paramIndex} RETURNING *`,
+      values
+    );
+
+    return result.rows[0] || null;
   }
 } 
