@@ -23,12 +23,7 @@ router.get('/verify', (req, res, next) => {
     logger.debug('Generated missing session ID:', req.sessionID);
   }
 
-  if (req.isAuthenticated()) {
-    // If authenticated, pass to requireAuth to record the access
-    // Set the original URL to include the /api/auth prefix
-    req.originalUrl = '/api/auth/verify';
-    next();
-  } else {
+  if (!req.isAuthenticated()) {
     // Log failed authentication attempt
     if (req.loginAttempt) {
       try {
@@ -53,7 +48,13 @@ router.get('/verify', (req, res, next) => {
       user: null,
       sessionId: req.sessionID
     });
+    return;
   }
+
+  // If authenticated, pass to requireAuth to record the access
+  // Set the original URL to include the /api/auth prefix
+  req.originalUrl = '/api/auth/verify';
+  next();
 }, requireAuth, (req, res) => {
   // This only runs if requireAuth passes
   res.json({

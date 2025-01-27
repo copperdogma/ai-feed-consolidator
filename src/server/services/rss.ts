@@ -4,6 +4,28 @@ import { logger } from '../logger';
 import { FeedItem, FeedMedia, FeedSource } from '../types/feed';
 import { User } from './db';
 
+// Extend the Parser type to include the parse method
+interface ExtendedParser {
+  parse(text: string): Promise<Parser.Output<{ [key: string]: any }>>;
+  parseURL(url: string): Promise<Parser.Output<{ [key: string]: any }>>;
+}
+
+class ExtendedRSSParser implements ExtendedParser {
+  private parser: Parser;
+
+  constructor(options?: Parser.ParserOptions<any, any>) {
+    this.parser = new Parser(options);
+  }
+
+  parse(text: string): Promise<Parser.Output<{ [key: string]: any }>> {
+    return this.parser.parseString(text);
+  }
+
+  parseURL(url: string): Promise<Parser.Output<{ [key: string]: any }>> {
+    return this.parser.parseURL(url);
+  }
+}
+
 export class RSSError extends Error {
   constructor(
     message: string,
@@ -39,10 +61,10 @@ type RSSFeedConfigUpdate = {
 }
 
 export class RSSService {
-  private readonly parser: Parser;
+  private readonly parser: ExtendedParser;
   
   constructor(private readonly pool: Pool) {
-    this.parser = new Parser({
+    this.parser = new ExtendedRSSParser({
       timeout: 10000, // 10 second timeout
       maxRedirects: 3,
       headers: {
@@ -101,14 +123,43 @@ export class RSSService {
   }
 
   /**
+   * Internal method to fetch feeds with proper column aliasing
+   */
+  private async fetchFeeds(whereClause = '', params: any[] = []): Promise<RSSFeedConfig[]> {
+    const result = await this.pool.query<RSSFeedConfig>(
+      `SELECT id, user_id as "userId", feed_url as "feedUrl", title,
+              description, site_url as "siteUrl", icon_url as "iconUrl",
+              last_fetched_at as "lastFetchedAt", error_count as "errorCount",
+              is_active as "isActive", fetch_interval_minutes as "fetchIntervalMinutes",
+              created_at as "createdAt", updated_at as "updatedAt"
+       FROM feed_configs
+       ${whereClause}`,
+      params
+    );
+
+    // Verify that required fields are present
+    for (const feed of result.rows) {
+      if (!feed.feedUrl) {
+        logger.warn({ feedId: feed.id }, 'Feed URL is missing in database');
+      }
+    }
+
+    return result.rows;
+  }
+
+  /**
+   * Get a specific feed for a user
+   */
+  async getFeed(userId: number, feedId: number): Promise<RSSFeedConfig | null> {
+    const feeds = await this.fetchFeeds('WHERE user_id = $1 AND id = $2', [userId, feedId]);
+    return feeds[0] || null;
+  }
+
+  /**
    * Get all active feeds for a user
    */
   async getUserFeeds(userId: number): Promise<RSSFeedConfig[]> {
-    const result = await this.pool.query<RSSFeedConfig>(
-      'SELECT * FROM feed_configs WHERE user_id = $1 ORDER BY created_at DESC',
-      [userId]
-    );
-    return result.rows;
+    return this.fetchFeeds('WHERE user_id = $1 ORDER BY created_at DESC', [userId]);
   }
 
   /**
@@ -196,16 +247,20 @@ export class RSSService {
    * Poll feeds that are due for update
    */
   async pollFeeds(): Promise<void> {
-    const result = await this.pool.query<RSSFeedConfig>(
-      `SELECT * FROM feed_configs
-       WHERE is_active = true
+    const feeds = await this.fetchFeeds(
+      `WHERE is_active = true
        AND (
          last_fetched_at IS NULL
          OR last_fetched_at < NOW() - (fetch_interval_minutes || ' minutes')::interval
        )`
     );
 
-    for (const feed of result.rows) {
+    for (const feed of feeds) {
+      if (!feed.feedUrl) {
+        logger.warn({ feedId: feed.id }, 'Skipping feed with missing URL');
+        continue;
+      }
+
       try {
         await this.pollFeed(feed);
         
@@ -218,8 +273,19 @@ export class RSSService {
           [feed.id]
         );
       } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        const errorStack = error instanceof Error ? error.stack : undefined;
+        const errorCause = error instanceof Error && error.cause ? error.cause : undefined;
+        
         logger.error(
-          { error, feedId: feed.id, feedUrl: feed.feedUrl },
+          { 
+            error: errorMessage,
+            stack: errorStack,
+            cause: errorCause,
+            feedId: feed.id,
+            feedUrl: feed.feedUrl,
+            isRetryable: error instanceof RSSError ? error.isRetryable : undefined
+          },
           'Error polling feed'
         );
 
@@ -241,16 +307,16 @@ export class RSSService {
   async pollFeed(feed: RSSFeedConfig): Promise<void> {
     try {
       if (!feed.feedUrl) {
-        throw new RSSError('Feed URL is missing');
+        throw new RSSError('Feed URL is missing', undefined, false);
       }
 
-      // Try to fetch the feed first to check if it's accessible
+      let text: string;
       try {
         const response = await fetch(feed.feedUrl);
         if (!response.ok) {
-          throw new RSSError(`Feed returned status ${response.status}`);
+          throw new RSSError(`Feed returned status ${response.status}: ${response.statusText}`);
         }
-        const text = await response.text();
+        text = await response.text();
         if (!text) {
           throw new RSSError('Feed returned empty response');
         }
@@ -260,12 +326,15 @@ export class RSSService {
           contentType: response.headers.get('content-type')
         }, 'Feed content fetched');
       } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        const errorStack = error instanceof Error ? error.stack : undefined;
         throw new RSSError(
-          `Failed to fetch feed: ${error instanceof Error ? error.message : 'Unknown error'}`
+          `Failed to fetch feed: ${errorMessage}`,
+          { error, stack: errorStack }
         );
       }
 
-      const parsedFeed = await this.parser.parseURL(feed.feedUrl);
+      const parsedFeed = await this.parser.parse(text);
       
       if (!parsedFeed) {
         throw new RSSError('Failed to parse feed - no content returned');
@@ -371,22 +440,5 @@ export class RSSService {
       }, 'Error polling feed');
       throw new RSSError(`Failed to poll feed: ${message}`, error);
     }
-  }
-
-  /**
-   * Get a specific feed for a user
-   */
-  async getFeed(userId: number, feedId: number): Promise<RSSFeedConfig | null> {
-    const result = await this.pool.query<RSSFeedConfig>(
-      `SELECT id, user_id as "userId", feed_url as "feedUrl", title,
-              description, site_url as "siteUrl", icon_url as "iconUrl",
-              last_fetched_at as "lastFetchedAt", error_count as "errorCount",
-              is_active as "isActive", fetch_interval_minutes as "fetchIntervalMinutes",
-              created_at as "createdAt", updated_at as "updatedAt"
-       FROM feed_configs 
-       WHERE user_id = $1 AND id = $2`,
-      [userId, feedId]
-    );
-    return result.rows[0] || null;
   }
 } 

@@ -84,7 +84,39 @@ describe('RSSService Integration', () => {
               });
             }
             return Promise.reject(new Error('Feed not found'));
-          })
+          }),
+          parseString: vi.fn().mockImplementation((content: string) => {
+            // Check if content is valid XML with RSS structure
+            if (content.includes('<rss') || content.includes('<feed')) {
+              return Promise.resolve({
+                title: 'Test Feed',
+                description: 'A test feed',
+                link: 'https://example.com',
+                items: [
+                  {
+                    title: 'Test Item 1',
+                    description: 'Test description 1',
+                    link: 'https://example.com/1',
+                    guid: '1',
+                    isoDate: '2024-01-23T12:00:00.000Z',
+                    contentSnippet: 'Test description 1'
+                  },
+                  {
+                    title: 'Test Item 2',
+                    description: 'Test description 2',
+                    link: 'https://example.com/2',
+                    guid: '2',
+                    isoDate: '2024-01-23T13:00:00.000Z',
+                    contentSnippet: 'Test description 2'
+                  }
+                ]
+              });
+            }
+            return Promise.reject(new Error('Invalid feed content'));
+          }),
+          options: {},
+          defaultRSS: vi.fn(),
+          getDefaults: vi.fn()
         }))
       };
     });
