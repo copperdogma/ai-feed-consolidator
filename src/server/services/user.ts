@@ -314,11 +314,16 @@ export class UserService {
   }
 
   static async findById(id: number): Promise<User | null> {
-    const result = await pool.query<User>(
-      'SELECT * FROM users WHERE id = $1',
-      [id]
-    );
-    return result.rows[0] || null;
+    try {
+      const result = await pool.query<User>(
+        'SELECT * FROM users WHERE id = $1',
+        [id]
+      );
+      return result.rows[0] || null;
+    } catch (error) {
+      console.error('Error finding user by ID:', error);
+      return null;
+    }
   }
 
   static async updateById(id: number, data: Partial<User>): Promise<User | null> {

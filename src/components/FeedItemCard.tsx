@@ -9,7 +9,6 @@ import {
   CardActions,
   Link,
   Tooltip,
-  Stack,
 } from '@mui/material';
 import { 
   OpenInNew as OpenInNewIcon, 
@@ -20,7 +19,7 @@ import {
   Bookmark as BookmarkIcon,
   BookmarkBorder as BookmarkBorderIcon,
 } from '@mui/icons-material';
-import { ProcessedFeedItem } from '../server/types/feed';
+import { ProcessedFeedItem, ConsumptionType } from '../types/feed';
 import config from '../config';
 
 interface FeedItemCardProps {
@@ -28,7 +27,7 @@ interface FeedItemCardProps {
   onRefresh?: () => void;
 }
 
-const getMediaIcon = (type: string) => {
+const getMediaIcon = (type: ConsumptionType) => {
   switch (type) {
     case 'listen':
       return <HeadphonesIcon fontSize="small" />;
@@ -124,7 +123,7 @@ Source: ${item.source.name} (${item.source.platform})`;
         boxShadow: 'none',
       }}
     >
-      {item.media && item.media.length > 0 && item.media[0].thumbnailUrl && (
+      {item.media?.[0]?.thumbnailUrl && (
         <Box 
           component="img"
           src={item.media[0].thumbnailUrl}

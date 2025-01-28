@@ -7,7 +7,7 @@ A personal platform for managing and consuming content from various services by 
 - **Platform Integration**
   - YouTube Watch Later
   - X/Twitter Bookmarks
-  - Feedly Saved Items
+  - RSS Feed Integration
   - Email-based flagging
   - Slack saved items
 
@@ -25,6 +25,9 @@ A personal platform for managing and consuming content from various services by 
   - Cross-platform content alignment
   - Historical tracking
   - Advanced search capabilities
+
+## Features
+- YouTube Channel Integration
 
 ## Getting Started
 

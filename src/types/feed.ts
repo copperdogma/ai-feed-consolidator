@@ -1,13 +1,19 @@
+export type Platform = 'youtube' | 'mastodon' | 'rss';
+
 export interface FeedSource {
   id: string;
   name: string;
-  platform: string;
+  platform: Platform;
   url: string;
 }
 
 export interface MediaItem {
   type: string;
   url: string;
+  width?: number;
+  height?: number;
+  contentType?: string;
+  thumbnailUrl?: string;
 }
 
 export interface FeedItem {
@@ -27,17 +33,21 @@ export interface FeedItem {
     youtube?: {
       duration?: string;
     };
+    tags?: Array<{ id: string }>;
   };
 }
 
+export type ContentType = 'technical' | 'news' | 'analysis' | 'tutorial' | 'entertainment';
+export type ConsumptionType = 'read' | 'watch' | 'listen';
+
 export interface ProcessedFeedItem extends FeedItem {
   summary: string;
-  content_type: 'technical' | 'news' | 'analysis' | 'tutorial' | 'entertainment';
+  content_type: ContentType;
   time_sensitive: boolean;
   requires_background: string[];
   consumption_time: {
     minutes: number;
-    type: 'read' | 'watch' | 'listen';
+    type: ConsumptionType;
   };
   processedAt: Date;
 } 

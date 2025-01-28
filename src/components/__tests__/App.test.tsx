@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import App from '../../App';
 import config from '../../config';
 
@@ -14,25 +15,125 @@ const mockLocation = {
 };
 
 Object.defineProperty(window, 'location', {
-  value: mockLocation,
+  value: {
+    ...mockLocation,
+    set href(url: string) {
+      // If the URL is just '/', append it to the base URL
+      if (url === '/') {
+        mockLocation.href = 'http://localhost:5173/';
+      } else {
+        mockLocation.href = url;
+      }
+    },
+    get href() {
+      return mockLocation.href;
+    }
+  },
   writable: true,
+  configurable: true
 });
 
 describe('App Authentication', () => {
+  let queryClient: QueryClient;
+
+  const mockUser = {
+    id: 1,
+    google_id: '123',
+    email: 'test@example.com',
+    display_name: 'Test User',
+    avatar_url: 'https://example.com/photo.jpg',
+  };
+
+  const getWelcomeText = () => screen.getByText((content, element) => {
+    const hasText = (node: Element | null) => node?.textContent === 'Welcome, Test User!';
+    const elementHasText = hasText(element);
+    return elementHasText;
+  });
+
+  // Helper function to find welcome message
+  const findWelcomeMessage = () => {
+    return screen.getByRole('heading', { 
+      name: new RegExp(`Welcome, ${mockUser.display_name}!`, 'i'),
+      level: 1
+    });
+  };
+
+  // Helper function to find logout button
+  const findLogoutButton = () => {
+    return screen.getByRole('button', { name: /log out/i });
+  };
+
   beforeEach(() => {
-    mockFetch.mockReset();
+    // Reset location href before each test
     mockLocation.href = 'http://localhost:5173';
+    queryClient = new QueryClient({
+      defaultOptions: {
+        queries: {
+          retry: false,
+        },
+      },
+    });
+
+    // Reset all mocks before each test
+    vi.clearAllMocks();
+
+    // Reset fetch mock and set up default responses
+    mockFetch.mockReset();
+    mockFetch.mockImplementation((url) => {
+      if (url === '/api/feed/items') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ items: [] })
+        });
+      }
+      if (url === '/api/feeds') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve([])
+        });
+      }
+      if (url === '/api/auth/verify') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            authenticated: true,
+            user: mockUser
+          })
+        });
+      }
+      if (url === '/api/auth/logout') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ success: true })
+        });
+      }
+      return Promise.reject(new Error(`Unhandled fetch to ${url}`));
+    });
+
+    // Mock window.location.href
+    Object.defineProperty(window, 'location', {
+      value: new URL('http://localhost:5173'),
+      writable: true,
+    });
   });
 
   it('should show login button when not authenticated', async () => {
-    mockFetch.mockImplementationOnce(() =>
-      Promise.resolve({
-        ok: false,
-        json: () => Promise.resolve({ authenticated: false }),
-      })
-    );
+    // Mock auth check to return not authenticated
+    mockFetch.mockImplementationOnce((url) => {
+      if (url === '/api/auth/verify') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ authenticated: false })
+        });
+      }
+      return mockFetch(url);
+    });
 
-    render(<App />);
+    render(
+      <QueryClientProvider client={queryClient}>
+        <App />
+      </QueryClientProvider>
+    );
 
     await waitFor(() => {
       expect(screen.getByText(/log in with google/i)).toBeInTheDocument();
@@ -40,260 +141,226 @@ describe('App Authentication', () => {
   });
 
   it('should show user profile when authenticated', async () => {
-    const mockUser = {
-      id: 1,
-      google_id: '123',
-      email: 'test@example.com',
-      display_name: 'Test User',
-      avatar_url: 'https://example.com/avatar.jpg',
-    };
-
-    // Mock auth check
-    mockFetch.mockImplementationOnce(() =>
-      Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ authenticated: true, user: mockUser }),
-      })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <App />
+      </QueryClientProvider>
     );
-
-    // Mock feed items fetch
-    mockFetch.mockImplementationOnce(() =>
-      Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve([]),
-      })
-    );
-
-    render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByText(`Welcome, ${mockUser.display_name}!`)).toBeInTheDocument();
+      expect(findWelcomeMessage()).toBeInTheDocument();
+      expect(findLogoutButton()).toBeInTheDocument();
+    });
+  });
+
+  it('should handle successful logout', async () => {
+    render(
+      <QueryClientProvider client={queryClient}>
+        <App />
+      </QueryClientProvider>
+    );
+
+    await waitFor(() => {
+      expect(findWelcomeMessage()).toBeInTheDocument();
+    });
+
+    const logoutButton = findLogoutButton();
+    await userEvent.click(logoutButton);
+
+    await waitFor(() => {
+      expect(window.location.href).toBe('http://localhost:5173/');
+    });
+  });
+
+  it('should handle failed logout gracefully', async () => {
+    // Mock failed logout
+    mockFetch.mockImplementationOnce((url) => {
+      if (url === '/api/auth/logout') {
+        return Promise.resolve({
+          ok: false,
+          json: () => Promise.resolve({ error: 'Logout failed' })
+        });
+      }
+      return mockFetch(url);
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <App />
+      </QueryClientProvider>
+    );
+
+    await waitFor(() => {
+      expect(findWelcomeMessage()).toBeInTheDocument();
+    });
+
+    const logoutButton = findLogoutButton();
+    await userEvent.click(logoutButton);
+
+    await waitFor(() => {
+      expect(screen.getByText(/error logging out/i)).toBeInTheDocument();
     });
   });
 
   it('should have correct login link', async () => {
-    mockFetch.mockImplementationOnce(() =>
-      Promise.resolve({
-        ok: false,
-        json: () => Promise.resolve({ authenticated: false }),
-      })
+    // Mock auth check to return not authenticated
+    mockFetch.mockImplementationOnce((url) => {
+      if (url === '/api/auth/verify') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ authenticated: false })
+        });
+      }
+      return mockFetch(url);
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <App />
+      </QueryClientProvider>
     );
 
-    render(<App />);
+    // Wait for loading to finish
+    await waitFor(() => {
+      expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+    });
+
+    const loginButton = screen.getByRole('button', { name: /log in with google/i });
+    await userEvent.click(loginButton);
 
     await waitFor(() => {
-      const loginButton = screen.getByRole('button', { name: /log in with google/i });
-      expect(loginButton).toBeInTheDocument();
-      loginButton.click();
       expect(window.location.href).toBe(`${config.serverUrl}${config.auth.googleAuthPath}`);
     });
   });
 
   it('should have correct logout link', async () => {
-    const mockUser = {
-      id: 1,
-      google_id: '123',
-      email: 'test@example.com',
-      display_name: 'Test User',
-      avatar_url: 'https://example.com/avatar.jpg',
-    };
-
-    // Mock auth check
-    mockFetch.mockImplementationOnce(() =>
-      Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ authenticated: true, user: mockUser }),
-      })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <App />
+      </QueryClientProvider>
     );
-
-    // Mock feed items fetch
-    mockFetch.mockImplementationOnce(() =>
-      Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve([]),
-      })
-    );
-
-    render(<App />);
 
     await waitFor(() => {
-      const logoutButton = screen.getByRole('button', { name: /logout/i });
-      expect(logoutButton).toBeInTheDocument();
-      logoutButton.click();
-      expect(window.location.href).toBe(`${config.serverUrl}${config.auth.logoutPath}`);
+      expect(findWelcomeMessage()).toBeInTheDocument();
+    });
+
+    const logoutButton = findLogoutButton();
+    await userEvent.click(logoutButton);
+
+    await waitFor(() => {
+      expect(window.location.href).toBe('http://localhost:5173/');
     });
   });
 
   describe('Logout Flow', () => {
     it('should show login screen after logout redirect', async () => {
-      const mockUser = {
-        id: 1,
-        google_id: 'test123',
-        email: 'test@example.com',
-        display_name: 'Test User',
-        avatar_url: 'https://example.com/photo.jpg'
-      };
-
-      // Mock initial auth check
-      mockFetch.mockImplementationOnce(() => 
-        Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ authenticated: true, user: mockUser })
-        })
-      ).mockImplementationOnce(() => 
-        Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve([]) // Empty feed items
-        })
-      );
-
-      // Mock auth check after logout
-      mockFetch.mockImplementationOnce(() => 
-        Promise.reject(new Error('Not authenticated'))
-      );
-
-      const { rerender } = render(<App />);
-
-      // Wait for profile to load
-      await waitFor(() => {
-        expect(screen.getByText('Welcome, Test User!')).toBeInTheDocument();
+      // Mock auth check to return not authenticated after logout
+      mockFetch.mockImplementationOnce((url) => {
+        if (url === '/api/auth/verify') {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ authenticated: false })
+          });
+        }
+        return mockFetch(url);
       });
 
-      // Simulate logout redirect
-      window.location.href = '/auth/logout';
-      
-      // Force a re-render and re-run of the useEffect
-      rerender(<App key="rerender" />);
+      render(
+        <QueryClientProvider client={queryClient}>
+          <App />
+        </QueryClientProvider>
+      );
 
-      // Wait for the auth check to complete
       await waitFor(() => {
-        expect(screen.queryByText('Welcome, Test User!')).not.toBeInTheDocument();
+        expect(screen.getByText(/log in with google/i)).toBeInTheDocument();
       });
-
-      // Verify logged out state
-      expect(screen.getByText('Welcome to AI Feed Consolidator')).toBeInTheDocument();
-      expect(screen.getByText('Please log in to continue')).toBeInTheDocument();
-      expect(screen.getByText('Log in with Google')).toBeInTheDocument();
     });
 
     it('should handle failed logout gracefully', async () => {
-      const mockUser = {
-        id: 1,
-        google_id: 'test123',
-        email: 'test@example.com',
-        display_name: 'Test User',
-        avatar_url: 'https://example.com/photo.jpg'
-      };
-
-      // Mock initial auth check
-      mockFetch.mockImplementationOnce(() => 
-        Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ authenticated: true, user: mockUser })
-        })
-      ).mockImplementationOnce(() => 
-        Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve([]) // Empty feed items
-        })
-      );
-
-      // Mock auth check after failed logout - still authenticated
-      mockFetch.mockImplementationOnce(() => 
-        Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ authenticated: true, user: mockUser })
-        })
-      ).mockImplementationOnce(() => 
-        Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve([]) // Empty feed items
-        })
-      );
-
-      const { rerender } = render(<App />);
-
-      // Wait for profile to load
-      await waitFor(() => {
-        expect(screen.getByText('Welcome, Test User!')).toBeInTheDocument();
+      // Mock failed logout
+      mockFetch.mockImplementationOnce((url) => {
+        if (url === '/api/auth/logout') {
+          return Promise.resolve({
+            ok: false,
+            json: () => Promise.resolve({ error: 'Logout failed' })
+          });
+        }
+        return mockFetch(url);
       });
 
-      // Simulate failed logout
-      window.location.href = '/auth/logout';
-      
-      // Force a re-render and re-run of the useEffect
-      rerender(<App key="rerender" />);
+      render(
+        <QueryClientProvider client={queryClient}>
+          <App />
+        </QueryClientProvider>
+      );
 
-      // Should still show profile
       await waitFor(() => {
-        expect(screen.getByText('Welcome, Test User!')).toBeInTheDocument();
+        expect(findWelcomeMessage()).toBeInTheDocument();
+      });
+
+      const logoutButton = findLogoutButton();
+      await userEvent.click(logoutButton);
+
+      await waitFor(() => {
+        expect(screen.getByText(/error logging out/i)).toBeInTheDocument();
       });
     });
 
     it('should handle multiple logout attempts', async () => {
-      const mockUser = {
-        id: 1,
-        google_id: 'test123',
-        email: 'test@example.com',
-        display_name: 'Test User',
-        avatar_url: 'https://example.com/photo.jpg'
-      };
-
-      // Mock initial auth check
-      mockFetch.mockImplementationOnce(() => 
-        Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ authenticated: true, user: mockUser })
-        })
-      ).mockImplementationOnce(() => 
-        Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve([]) // Empty feed items
-        })
-      );
-
-      // Mock first auth check after logout
-      mockFetch.mockImplementationOnce(() => 
-        Promise.reject(new Error('Not authenticated'))
-      );
-
-      // Mock second auth check after logout
-      mockFetch.mockImplementationOnce(() => 
-        Promise.reject(new Error('Not authenticated'))
-      );
-
-      const { rerender } = render(<App />);
-
-      // Wait for profile to load
-      await waitFor(() => {
-        expect(screen.getByText('Welcome, Test User!')).toBeInTheDocument();
+      // Mock failed logout
+      mockFetch.mockImplementation((url) => {
+        if (url === '/api/auth/logout') {
+          return Promise.resolve({
+            ok: false,
+            json: () => Promise.resolve({ error: 'Logout failed' })
+          });
+        }
+        if (url === '/api/feed/items') {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ items: [] })
+          });
+        }
+        if (url === '/api/feeds') {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve([])
+          });
+        }
+        if (url === '/api/auth/verify') {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({
+              authenticated: true,
+              user: mockUser
+            })
+          });
+        }
+        return Promise.reject(new Error(`Unhandled fetch to ${url}`));
       });
 
-      // First logout
-      window.location.href = '/auth/logout';
-      
-      // Force a re-render and re-run of the useEffect
-      rerender(<App key="first-logout" />);
+      render(
+        <QueryClientProvider client={queryClient}>
+          <App />
+        </QueryClientProvider>
+      );
 
-      // Wait for the auth check to complete
       await waitFor(() => {
-        expect(screen.queryByText('Welcome, Test User!')).not.toBeInTheDocument();
+        expect(findWelcomeMessage()).toBeInTheDocument();
       });
 
-      // Verify logged out state
-      expect(screen.getByText('Welcome to AI Feed Consolidator')).toBeInTheDocument();
-      expect(screen.getByText('Please log in to continue')).toBeInTheDocument();
-      expect(screen.getByText('Log in with Google')).toBeInTheDocument();
+      const logoutButton = findLogoutButton();
+      await userEvent.click(logoutButton);
 
-      // Second logout attempt
-      window.location.href = '/auth/logout';
-      
-      // Force a re-render and re-run of the useEffect
-      rerender(<App key="second-logout" />);
-
-      // Should still be in logged out state
       await waitFor(() => {
-        expect(screen.getByText('Log in with Google')).toBeInTheDocument();
+        expect(screen.getByText(/error logging out/i)).toBeInTheDocument();
+      });
+
+      // Try logout again
+      await userEvent.click(logoutButton);
+
+      await waitFor(() => {
+        expect(screen.getByText(/error logging out/i)).toBeInTheDocument();
       });
     });
   });

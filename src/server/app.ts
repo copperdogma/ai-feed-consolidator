@@ -139,26 +139,26 @@ export async function createApp(): Promise<Express> {
   // Add session debugging middleware in test environment
   if (process.env.NODE_ENV === 'test') {
     app.use((req, res, next) => {
-      // Save session after the response is sent
-      const oldEnd = res.end;
-      res.end = function (chunk: any, encoding: BufferEncoding, cb?: () => void) {
-        if (req.session) {
-          // Ensure session ID is set
-          if (!req.sessionID) {
-            req.sessionID = require('crypto').randomBytes(16).toString('hex');
-            logger.debug('Generated missing session ID:', req.sessionID);
-          }
-          req.session.save((err) => {
-            if (err) {
-              logger.error({ err }, 'Error saving session');
-            }
-            oldEnd.apply(res, [chunk, encoding, cb]);
-          });
-        } else {
-          oldEnd.apply(res, [chunk, encoding, cb]);
+      // Save session before proceeding
+      if (req.session) {
+        // Ensure session ID is set
+        if (!req.sessionID) {
+          req.sessionID = require('crypto').randomBytes(16).toString('hex');
+          logger.debug('Generated missing session ID:', req.sessionID);
         }
-      } as any;
-      next();
+        
+        // Save session synchronously
+        req.session.save((err) => {
+          if (err) {
+            logger.error({ err }, 'Error saving session');
+            next(err);
+            return;
+          }
+          next();
+        });
+      } else {
+        next();
+      }
     });
   }
 

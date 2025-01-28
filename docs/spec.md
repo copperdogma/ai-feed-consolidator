@@ -33,7 +33,6 @@ Create a personal platform for managing and consuming content from various servi
   - Questions:
     - Can we hook into YouTube "Watch Later" API using personal API key?
     - What are the API limitations for personal X account?
-    - How to handle Feedly saved items from personal feed?
   - Status: Needs research
 
 - What should be the format for email-based prioritization?
@@ -127,7 +126,6 @@ Create a personal platform for managing and consuming content from various servi
   - X/Twitter (Bookmarks)
   - Email (Priority Flagging)
   - Slack (Saved Items, Important Messages)
-  - Future: Feedly OPML import for initial feed setup
 - Maintain local state:
   - Track read/unread status
   - Save items for later
@@ -251,7 +249,7 @@ Create a personal platform for managing and consuming content from various servi
 1. Core platform integration:
    - YouTube Watch Later
    - X Bookmarks
-   - Feedly Saved
+   - Direct RSS feeds
 2. Basic email integration
 3. Two-level summary generation
 4. Simple priority management

@@ -175,4 +175,15 @@ export class LoginHistoryService {
       throw error;
     }
   }
+
+  async recordLogin(userId: number, requestPath: string = '/api/auth/verify', ipAddress: string = '127.0.0.1', userAgent: string = 'Unknown'): Promise<void> {
+    await LoginHistoryService.recordLoginAttempt({
+      userId,
+      success: true,
+      ipAddress,
+      userAgent,
+      loginTime: new Date(),
+      requestPath
+    });
+  }
 } 

@@ -3,8 +3,8 @@ import { User } from './auth';
 
 declare module 'express-session' {
   interface SessionData {
+    passport?: any;
     user?: User;
-    feedlyState?: string;
   }
 }
 

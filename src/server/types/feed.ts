@@ -2,6 +2,10 @@
  * Common interfaces for feed items across different sources
  */
 
+export type Platform = 'youtube' | 'mastodon' | 'rss';
+export type ContentType = 'technical' | 'news' | 'analysis' | 'tutorial' | 'entertainment';
+export type ConsumptionType = 'read' | 'watch' | 'listen';
+
 /**
  * Represents a source/origin of a feed item
  */
@@ -9,7 +13,7 @@ export interface FeedSource {
   id: string;           // Unique identifier for the source
   name: string;         // Display name of the source
   url: string;         // URL to the source
-  platform: string;    // Platform identifier (e.g., 'feedly', 'youtube', 'twitter')
+  platform: Platform;    // Platform identifier
 }
 
 /**
@@ -21,6 +25,7 @@ export interface FeedMedia {
   width?: number;
   height?: number;
   contentType?: string;
+  thumbnailUrl?: string;
 }
 
 /**
@@ -46,20 +51,25 @@ export interface FeedItem {
   source: FeedSource;
   media: FeedMedia[];
   topics: string[];
-  feedConfigId?: number;  // Optional since not all feed items will have this
+  feedConfigId?: number;
   engagement?: {
     score: number;
     raw: number;
   };
-  metadata?: Record<string, any>;
+  metadata?: {
+    youtube?: {
+      duration?: string;
+    };
+    tags?: Array<{ id: string }>;
+  };
   // Processed content fields
   processedSummary?: string;
-  contentType?: 'technical' | 'news' | 'analysis' | 'tutorial' | 'entertainment';
+  contentType?: ContentType;
   timeSensitive?: boolean;
   requiredBackground?: string[];
   consumptionTime?: {
     minutes: number;
-    type: 'read' | 'watch' | 'listen';
+    type: ConsumptionType;
   };
 }
 
@@ -68,12 +78,18 @@ export interface FeedItem {
  */
 export interface ProcessedFeedItem extends FeedItem {
   processedAt: Date;            // When the item was processed
-  content_type: 'technical' | 'news' | 'analysis' | 'tutorial' | 'entertainment';  // Type of content
+  content_type: ContentType;    // Type of content
   time_sensitive: boolean;      // Whether the content is time-sensitive
   requires_background: string[]; // Required background knowledge
   consumption_time: {           // Time to consume the content
     minutes: number;            // Duration in minutes
-    type: 'read' | 'watch' | 'listen';  // Type of consumption
+    type: ConsumptionType;      // Type of consumption
   };
   summary: string;             // Generated summary
+  id: string;
+  title: string;
+  source: FeedSource & {       // Merge with base interface
+    platform: Platform;
+    url?: string;
+  };
 } 

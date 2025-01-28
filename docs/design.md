@@ -10,7 +10,7 @@
 ## Architecture Overview
 ### High-Level Components
 - Content Integration Service
-  - Platform-specific adapters (YouTube, X, Feedly, Email, Slack)
+  - Platform-specific adapters (YouTube, RSS, X, Email, Slack)
   - Authentication management
   - Sync orchestration
 - Content Processing Pipeline

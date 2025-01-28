@@ -229,4 +229,30 @@ router.post('/:feedId/refresh', requireAuth, async (req, res) => {
   }
 });
 
+/**
+ * Get all feed items for the current user
+ */
+router.get('/items', requireAuth, async (req, res) => {
+  try {
+    // Get all active feeds for the user
+    const feeds = await rssService.getUserFeeds(req.user!.id);
+    const activeFeeds = feeds.filter(feed => feed.isActive);
+
+    // Get items from all active feeds
+    const allItems = await Promise.all(
+      activeFeeds.map(feed => feedItemService.getFeedItems(feed.id))
+    );
+
+    // Flatten and sort by published date
+    const items = allItems
+      .flat()
+      .sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
+
+    res.json(items);
+  } catch (error) {
+    logger.error({ error }, 'Error getting all feed items');
+    res.status(500).json({ error: 'Failed to get feed items' });
+  }
+});
+
 export default router; 

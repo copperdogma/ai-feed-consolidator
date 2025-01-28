@@ -4,8 +4,6 @@ interface Config {
     readonly googleAuthPath: string;
     readonly googleCallbackPath: string;
     readonly logoutPath: string;
-    readonly feedlyAuthPath: string;
-    readonly feedlyCallbackPath: string;
   };
   readonly api: {
     readonly toggleSavedPath: string;
@@ -17,9 +15,7 @@ export const config: Config = {
   auth: {
     googleAuthPath: '/api/auth/google',
     googleCallbackPath: '/api/auth/google/callback',
-    logoutPath: '/api/auth/logout',
-    feedlyAuthPath: '/api/auth/feedly',
-    feedlyCallbackPath: '/api/auth/feedly/callback'
+    logoutPath: '/api/auth/logout'
   },
   api: {
     toggleSavedPath: '/api/feed/items/:id/toggle-saved'

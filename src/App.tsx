@@ -1,18 +1,14 @@
 /** @jsxImportSource react */
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-  Container,
   Typography,
   Button,
   Box,
   CircularProgress,
   Avatar,
-  Grid,
   Stack,
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
-import { FeedItemCard } from './components/FeedItemCard';
-import { ProcessedFeedItem } from './server/types/feed';
 import GoogleIcon from '@mui/icons-material/Google';
 import RssFeedIcon from '@mui/icons-material/RssFeed';
 import config from './config';
@@ -20,6 +16,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider, CssBaseline } from '@mui/material';
 import { theme } from './theme';
 import { FeedManagement } from './components/FeedManagement';
+import { FeedDisplay } from './components/FeedDisplay';
 
 interface User {
   id: number;
@@ -27,7 +24,6 @@ interface User {
   email: string;
   display_name: string | null;
   avatar_url: string | null;
-  feedly_access_token?: string;
 }
 
 interface AuthResponse {
@@ -44,37 +40,32 @@ const PageContainer = styled('div')({
   padding: '2rem'
 });
 
-const ContentBox = styled(Box)(({ theme }) => ({
+const ContentBox = styled(Box)({
+  maxWidth: '800px',
+  width: '100%',
   display: 'flex',
   flexDirection: 'column',
-  alignItems: 'center',
-  textAlign: 'center',
-  gap: theme.spacing(3),
-  padding: theme.spacing(4),
-  maxWidth: 800,
-  width: '100%',
-  backgroundColor: '#fff',
-  borderRadius: theme.spacing(2),
-  boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-  '& .MuiAvatar-root': {
-    width: 128,
-    height: 128,
-    marginBottom: theme.spacing(2)
-  }
-}));
+  alignItems: 'center'
+});
 
-const queryClient = new QueryClient();
+// Configure React Query client
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5, // 5 minutes
+      retry: 3,
+      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+    },
+  },
+});
 
 function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [feedItems, setFeedItems] = useState<ProcessedFeedItem[]>([]);
-  const [loadingFeed, setLoadingFeed] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch('http://localhost:3003/api/auth/verify', {
-      credentials: 'include'
-    })
+    fetch('/api/auth/verify')
       .then(res => {
         if (res.ok) return res.json() as Promise<AuthResponse>;
         throw new Error('Not authenticated');
@@ -84,39 +75,18 @@ function App() {
       .finally(() => setLoading(false));
   }, []);
 
-  const loadFeedItems = useCallback(async () => {
-    if (!user) return;
-    setLoadingFeed(true);
+  const handleLogout = async () => {
     try {
-      const response = await fetch(`${config.serverUrl}/api/feed/items`, {
-        credentials: 'include'
-      });
-
-      if (!response) {
-        console.error('No response received from server');
-        setFeedItems([]);
-        return;
-      }
-
+      const response = await fetch(`${config.serverUrl}${config.auth.logoutPath}`);
       if (!response.ok) {
-        console.error(`HTTP error! status: ${response.status}`);
-        setFeedItems([]);
-        return;
+        setError('Error logging out');
+      } else {
+        window.location.href = '/';
       }
-
-      const data = await response.json();
-      setFeedItems(data);
-    } catch (error) {
-      console.error('Error loading feed items:', error);
-      setFeedItems([]);
-    } finally {
-      setLoadingFeed(false);
+    } catch (err) {
+      setError('Error logging out');
     }
-  }, [user]);
-
-  useEffect(() => {
-    loadFeedItems();
-  }, [loadFeedItems]);
+  };
 
   if (loading) {
     return (
@@ -157,57 +127,38 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider theme={theme}>
         <CssBaseline />
-        <FeedManagement />
         <PageContainer>
           <ContentBox>
+            {error && (
+              <Typography color="error" sx={{ mb: 2 }}>
+                {error}
+              </Typography>
+            )}
             <Box sx={{ mb: 4, textAlign: 'center' }}>
               <Typography variant="h4" component="h1" gutterBottom>
                 Welcome, {user.display_name || 'User'}!
               </Typography>
-              {user.avatar_url && (
-                <Avatar
-                  src={user.avatar_url}
-                  alt={user.display_name || 'Profile'}
-                  imgProps={{ referrerPolicy: 'no-referrer' }}
-                />
-              )}
-              {!user.feedly_access_token && (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, justifyContent: 'center' }}>
+                {user.avatar_url && (
+                  <Avatar
+                    src={user.avatar_url}
+                    alt={user.display_name || 'Profile'}
+                    imgProps={{ referrerPolicy: 'no-referrer' }}
+                  />
+                )}
                 <Button
                   variant="outlined"
-                  color="primary"
-                  onClick={() => window.location.href = `${config.serverUrl}/api/auth/feedly`}
-                  startIcon={<RssFeedIcon />}
-                  sx={{ mt: 2 }}
+                  onClick={handleLogout}
+                  sx={{ ml: 2 }}
                 >
-                  Connect Feedly Account
+                  Log Out
                 </Button>
-              )}
-            </Box>
-
-            {loadingFeed ? (
-              <CircularProgress />
-            ) : feedItems.length > 0 ? (
-              <Box sx={{ width: '100%' }}>
-                {feedItems.map(item => (
-                  <FeedItemCard 
-                    key={item.id} 
-                    item={item} 
-                    onRefresh={loadFeedItems}
-                  />
-                ))}
               </Box>
-            ) : (
-              <Typography>No feed items available</Typography>
-            )}
-
-            <Button
-              variant="outlined"
-              color="primary"
-              onClick={() => window.location.href = `${config.serverUrl}${config.auth.logoutPath}`}
-              sx={{ mt: 2 }}
-            >
-              Logout
-            </Button>
+            </Box>
+            <FeedManagement />
+            <Box sx={{ mt: 4 }}>
+              <FeedDisplay queryClient={queryClient} />
+            </Box>
           </ContentBox>
         </PageContainer>
       </ThemeProvider>

@@ -274,13 +274,13 @@ module.exports = {
 
     // Add comments
     await queryInterface.sequelize.query(`
-      COMMENT ON TABLE feed_items IS 'Stores content items from various sources (Feedly, YouTube, etc.)';
+      COMMENT ON TABLE feed_items IS 'Stores content items from various sources (RSS, YouTube, etc.)';
       COMMENT ON TABLE processed_items IS 'Stores AI-processed content and metadata to avoid reprocessing';
       COMMENT ON TABLE item_states IS 'Tracks per-user item states (read/unread, saved/unsaved)';
       COMMENT ON TABLE sync_history IS 'Tracks synchronization attempts with content sources';
       
-      COMMENT ON COLUMN feed_items.source_id IS 'Platform-specific ID (e.g., Feedly ID, YouTube ID)';
-      COMMENT ON COLUMN feed_items.source_type IS 'Platform identifier (feedly, youtube, x, etc.)';
+      COMMENT ON COLUMN feed_items.source_id IS 'Platform-specific ID (e.g., RSS GUID, YouTube ID)';
+      COMMENT ON COLUMN feed_items.source_type IS 'Platform identifier (rss, youtube, x, etc.)';
       COMMENT ON COLUMN feed_items.raw_metadata IS 'Source-specific metadata stored as JSONB';
       COMMENT ON COLUMN processed_items.version IS 'For tracking processing algorithm versions';
       COMMENT ON COLUMN item_states.last_synced_at IS 'Last time we synced this item state with its source';

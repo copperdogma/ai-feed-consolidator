@@ -3,6 +3,7 @@
 20240424: Created by Cam Marsollier with Claude 3.5 Sonnet
 20240424: Updated by Cam Marsollier with Claude 3.5 Sonnet to make schema more source-agnostic
 20240427: Updated by Cam Marsollier with Claude 3.5 Sonnet to document Sequelize migrations
+20240428: Updated by Cam Marsollier with Claude 3.5 Sonnet to remove Feedly-specific content
 
 ## Overview
 This document outlines the database schema for storing feed items, their processed content, and user interactions. The design aims to:
@@ -20,8 +21,7 @@ The database schema is managed through Sequelize migrations for type safety, rev
 2. `20240127000001-create-feed-tables.cjs`: Feed-related tables (feed_items, processed_items, item_states, sync_history)
 3. `20240127000002-add-feed-config-id.cjs`: Feed configuration relationship
 4. `20240127000003-create-feed-configs.cjs`: Feed configuration table
-5. `20240127000004-remove-feedly-columns.cjs`: Remove Feedly-specific columns
-6. `20240127000005-create-login-history.cjs`: Login history tracking
+5. `20240127000005-create-login-history.cjs`: Login history tracking
 
 Migration features:
 - Type-safe column definitions
@@ -38,8 +38,8 @@ Primary table for storing content items from various sources.
 ```sql
 CREATE TABLE feed_items (
     id SERIAL PRIMARY KEY,
-    source_id VARCHAR(255) NOT NULL,  -- Platform-specific ID (e.g., Feedly ID, YouTube ID)
-    source_type VARCHAR(50) NOT NULL DEFAULT 'feedly',  -- Platform identifier (feedly, youtube, x, etc.)
+    source_id VARCHAR(255) NOT NULL,  -- Platform-specific ID (e.g., YouTube ID, RSS GUID)
+    source_type VARCHAR(50) NOT NULL,  -- Platform identifier (youtube, rss, mastodon, etc.)
     title TEXT NOT NULL,
     author VARCHAR(255),
     content TEXT,
@@ -89,7 +89,7 @@ CREATE TABLE item_states (
     feed_item_id INTEGER NOT NULL REFERENCES feed_items(id) ON DELETE CASCADE,
     is_read BOOLEAN DEFAULT false,
     is_saved BOOLEAN DEFAULT false,
-    last_synced_at TIMESTAMP WITH TIME ZONE,  -- Last time we synced with Feedly
+    last_synced_at TIMESTAMP WITH TIME ZONE,  -- Last time we synced with source
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(user_id, feed_item_id)
@@ -101,7 +101,7 @@ CREATE INDEX idx_item_states_user_saved ON item_states(user_id) WHERE is_saved =
 ```
 
 ### sync_history
-Tracks synchronization attempts with Feedly for debugging and monitoring.
+Tracks synchronization attempts with sources for debugging and monitoring.
 ```sql
 CREATE TABLE sync_history (
     id SERIAL PRIMARY KEY,
@@ -137,7 +137,7 @@ WHERE created_at < NOW() - INTERVAL '90 days'
 ```
 
 ### Indexing Strategy
-1. Primary lookup by external_id for Feedly synchronization
+1. Primary lookup by source_id and source_type
 2. Date-based indexes for cleanup and sorting
 3. Compound indexes for common query patterns
 4. Partial indexes for saved items
@@ -145,7 +145,7 @@ WHERE created_at < NOW() - INTERVAL '90 days'
 ## Sync Process
 
 ### Initial Sync
-1. Fetch all saved items from Feedly
+1. Fetch all items from source
 2. Insert into feed_items if not exists
 3. Update item_states for the user
 4. Queue items for processing
@@ -157,9 +157,9 @@ WHERE created_at < NOW() - INTERVAL '90 days'
 4. Update last_synced_at timestamps
 
 ### State Sync
-1. Compare local and Feedly states
+1. Compare local and source states
 2. Update item_states table
-3. Push changes back to Feedly if local is newer
+3. Push changes back to source if local is newer
 
 ## Next Steps
 1. Implement database migrations
@@ -172,20 +172,19 @@ WHERE created_at < NOW() - INTERVAL '90 days'
 ## Source Extensibility
 
 ### Current Implementation
-- Initially focused on Feedly integration
+- Initially focused on RSS integration
 - Schema designed to be source-agnostic
 - Basic support for different content types
 
 ### Supported Source Types
 Current:
-- `feedly`: RSS and news aggregation
+- `rss`: Direct RSS feeds
+- `youtube`: Video content
+- `mastodon`: Federated social posts
 
 Planned/Possible:
-- `youtube`: Video content
 - `x`: Social media posts
 - `podcast`: Audio content
-- `rss`: Direct RSS feeds
-- `mastodon`: Federated social posts
 
 ### Source-Specific Considerations
 
@@ -193,21 +192,21 @@ Planned/Possible:
 Each source type has its own metadata schema stored in `raw_metadata`:
 
 ```json
-// Feedly example
-{
-  "feedly": {
-    "tags": ["global.saved"],
-    "categories": ["tech"],
-    "engagement": 23
-  }
-}
-
-// YouTube example (future)
+// YouTube example
 {
   "youtube": {
     "duration": "PT15M33S",
     "viewCount": 12345,
     "likes": 789
+  }
+}
+
+// RSS example
+{
+  "rss": {
+    "guid": "unique-id",
+    "categories": ["tech"],
+    "enclosures": []
   }
 }
 ```
@@ -220,7 +219,7 @@ Different source types may require different processing approaches:
 - Social posts: Thread aggregation
 
 ### Implementation Strategy
-1. Start with Feedly implementation
+1. Start with RSS implementation
 2. Abstract common patterns
 3. Add new sources as needed
 4. Keep source-specific code isolated

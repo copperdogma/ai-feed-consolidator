@@ -7,11 +7,8 @@ export interface User {
   id: number;
   google_id: string;
   email: string;
-  display_name: string;
+  display_name: string | null;
   avatar_url: string | null;
-  feedly_access_token: string | null;
-  feedly_refresh_token: string | null;
-  feedly_user_id: string | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -264,12 +261,9 @@ export async function initializeDatabase(): Promise<void> {
         CREATE TABLE IF NOT EXISTS users (
           id SERIAL PRIMARY KEY,
           google_id TEXT UNIQUE NOT NULL,
-          email TEXT NOT NULL,
-          display_name TEXT NOT NULL,
+          email TEXT UNIQUE NOT NULL,
+          display_name TEXT,
           avatar_url TEXT,
-          feedly_access_token TEXT,
-          feedly_refresh_token TEXT,
-          feedly_user_id TEXT,
           created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
         )

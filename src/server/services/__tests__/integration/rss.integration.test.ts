@@ -225,7 +225,7 @@ describe('RSSService Integration', () => {
             feed_config_id
           ) VALUES (
             'test-source-id',
-            'feedly',
+            'rss',
             'Test Title',
             'https://example.com/test',
             CURRENT_TIMESTAMP,

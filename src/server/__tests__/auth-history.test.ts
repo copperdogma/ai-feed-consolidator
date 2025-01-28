@@ -41,6 +41,8 @@ describe('Auth History', () => {
           });
 
         if (sessionResponse.status === 200 && sessionResponse.body.authenticated) {
+          // Wait for session to be saved
+          await new Promise(resolve => setTimeout(resolve, 100));
           break;
         }
 
@@ -56,12 +58,27 @@ describe('Auth History', () => {
         throw new Error(`Failed to initialize session: ${sessionResponse?.body?.error || 'Unknown error'}`);
       }
 
-      // Verify session was initialized
-      const verifyResponse = await agent.get('/api/auth/verify');
-      console.log('Session verification response:', verifyResponse.body);
+      // Verify session was initialized with retries
+      let verifyResponse;
+      retries = 0;
 
-      if (!verifyResponse.body.authenticated || verifyResponse.body.user?.id !== testUser.id) {
-        console.error('Session verification failed:', verifyResponse.body);
+      while (retries < maxRetries) {
+        verifyResponse = await agent.get('/api/auth/verify');
+        console.log('Session verification response:', verifyResponse.body);
+
+        if (verifyResponse.status === 200 && verifyResponse.body.authenticated && verifyResponse.body.user?.id === testUser.id) {
+          break;
+        }
+
+        console.log(`Session verification attempt ${retries + 1} failed:`, verifyResponse.body);
+        retries++;
+        if (retries < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+
+      if (!verifyResponse || verifyResponse.status !== 200 || !verifyResponse.body.authenticated || verifyResponse.body.user?.id !== testUser.id) {
+        console.error('Session verification failed:', verifyResponse?.body);
         throw new Error('Session initialization failed: User not authenticated');
       }
     } catch (error) {

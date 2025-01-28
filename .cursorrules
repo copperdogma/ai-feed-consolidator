@@ -44,9 +44,10 @@ Programming Guidelines:
 - Add relevant links to /doc/design.md when significant implementation details are finalized
 - Automatically update or propose updates to /doc/spec.md if new requirements emerge from the codebase.
 - If encountering a new issue or task during coding, log it in /doc/todo.md.
+- When working on a long task, don't assume you're finished until you do a full search to check the task is truly complete.
 
 Test Failure/Bug Fixing Loop
-- Run the tests with npm run test:ci
+- Run the tests with: npm run test:ci
 - If the tests fail, categorize them by cause, do a root cause analysis, and tackle only one cause at a time, running the tests after each fix to ensure the issue is solved and not moving on until it is.
 - Prioritize the test failure that might be causing other tests to fail.
 - When struggling to fix an issue, frequently stop. Take a step back to consider if the approach itself is wrong. Don't just blindly fix errors.
