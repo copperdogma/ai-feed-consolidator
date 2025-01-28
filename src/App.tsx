@@ -17,6 +17,7 @@ import { ThemeProvider, CssBaseline } from '@mui/material';
 import { theme } from './theme';
 import { FeedManagement } from './components/FeedManagement';
 import { FeedDisplay } from './components/FeedDisplay';
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 
 interface User {
   id: number;
@@ -48,13 +49,20 @@ const ContentBox = styled(Box)({
   alignItems: 'center'
 });
 
-// Configure React Query client
+// Create a client
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60 * 5, // 5 minutes
-      retry: 3,
-      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+      staleTime: 1000 * 60, // Data remains fresh for 1 minute
+      gcTime: 1000 * 60 * 5, // Garbage collection after 5 minutes (replaces cacheTime)
+      refetchOnWindowFocus: true, // Refetch when window regains focus
+      refetchOnMount: true, // Refetch on component mount
+      retry: 3, // Retry failed requests 3 times
+      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000), // Exponential backoff
+    },
+    mutations: {
+      retry: 2, // Retry failed mutations twice
+      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000), // Exponential backoff
     },
   },
 });
@@ -161,6 +169,7 @@ function App() {
             </Box>
           </ContentBox>
         </PageContainer>
+        <ReactQueryDevtools initialIsOpen={false} />
       </ThemeProvider>
     </QueryClientProvider>
   );

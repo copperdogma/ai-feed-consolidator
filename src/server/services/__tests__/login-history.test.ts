@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { LoginHistoryService } from '../login-history';
 import { pool } from '../db';
-import { cleanupDatabase, createTestUser } from '../../__tests__/setup';
+import { cleanupDatabase, createTestUser, verifyTestUser } from '../../__tests__/setup';
 import { User } from '../db';
 
 describe('LoginHistoryService', () => {
@@ -11,6 +11,20 @@ describe('LoginHistoryService', () => {
     await cleanupDatabase();
     LoginHistoryService.initialize(pool);
     testUser = await createTestUser();
+    // Verify the test user exists
+    const verifiedUser = await verifyTestUser(testUser.id);
+    if (!verifiedUser) {
+      throw new Error('Failed to create test user');
+    }
+    // Double-check user exists
+    const finalCheck = await pool.query<User>('SELECT * FROM users WHERE id = $1', [testUser.id]);
+    if (!finalCheck.rows[0]) {
+      throw new Error('Test user not found after creation');
+    }
+  });
+
+  afterEach(async () => {
+    await cleanupDatabase();
   });
 
   it('should record login attempts', async () => {
@@ -42,13 +56,11 @@ describe('LoginHistoryService', () => {
       failureReason: i % 2 === 0 ? undefined : 'test failure'
     }));
 
-    for (const attempt of attempts) {
-      await LoginHistoryService.recordLoginAttempt(attempt);
-    }
+    // Record each attempt and wait for them to complete
+    await Promise.all(attempts.map(attempt => LoginHistoryService.recordLoginAttempt(attempt)));
 
     const history = await LoginHistoryService.getLoginHistory(testUser.id, 3);
     expect(history).toHaveLength(3);
-    expect(history.length).toBeGreaterThan(0);
     expect(history[0].loginTime instanceof Date).toBe(true);
     if (history.length > 1) {
       expect(history[0].loginTime.getTime()).toBeGreaterThan(history[1].loginTime.getTime());

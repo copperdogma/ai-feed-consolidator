@@ -48,9 +48,9 @@ Programming Guidelines:
 
 Test Failure/Bug Fixing Loop
 - Run the tests with: npm run test:ci
-- If the tests fail, categorize them by cause, do a root cause analysis, and tackle only one cause at a time, running the tests after each fix to ensure the issue is solved and not moving on until it is.
+- If the tests fail, categorize them by cause, do a root cause analysis, and tackle only one cause at a time, running the tests after each fix to ensure the issue is solved and not moving on until it is. You are not done until all tests pass, so keep running them.
 - Prioritize the test failure that might be causing other tests to fail.
-- When struggling to fix an issue, frequently stop. Take a step back to consider if the approach itself is wrong. Don't just blindly fix errors.
+- When struggling to fix an issue, frequently stop. Take a step back to question what we actually need to test and what the ideal testing method would be.
 - Search the @web for assitance or ideas for other approaches, especially if the error is persistent.
 
 Specific Rules:

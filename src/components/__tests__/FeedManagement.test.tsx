@@ -29,13 +29,9 @@ describe('FeedManagement', () => {
   });
 
   it('renders loading state initially', () => {
-    mockFetch.mockImplementationOnce(() => 
-      new Promise(() => {})
-    );
-
     render(<FeedManagement />, { wrapper: createWrapper() });
     
-    expect(screen.getByRole('progressbar')).toBeInTheDocument();
+    expect(screen.getAllByTestId('skeleton')).toHaveLength(27);
   });
 
   it('renders feed list when data is loaded', async () => {

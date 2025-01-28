@@ -19,8 +19,9 @@ import {
   Bookmark as BookmarkIcon,
   BookmarkBorder as BookmarkBorderIcon,
 } from '@mui/icons-material';
-import { ProcessedFeedItem, ConsumptionType } from '../types/feed';
+import { ProcessedFeedItem, ConsumptionType, Tag } from '../types/feed';
 import config from '../config';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 interface FeedItemCardProps {
   item: ProcessedFeedItem;
@@ -39,22 +40,11 @@ const getMediaIcon = (type: ConsumptionType) => {
 };
 
 export function FeedItemCard({ item, onRefresh }: FeedItemCardProps) {
-  const [isSaving, setIsSaving] = useState(false);
-  const [isSaved, setIsSaved] = useState(
-    item.metadata?.tags?.some(tag => tag.id.includes('global.saved')) ?? false
-  );
+  const queryClient = useQueryClient();
+  const isSaved = item.metadata?.tags?.some(tag => tag.id.includes('global.saved')) ?? false;
 
-  const toggleSaved = async () => {
-    if (isSaving) return;
-    
-    console.log('Toggling saved status:', { 
-      id: item.externalId, 
-      currentStatus: isSaved,
-      metadata: item.metadata 
-    });
-    
-    setIsSaving(true);
-    try {
+  const toggleSavedMutation = useMutation({
+    mutationFn: async () => {
       const togglePath = config.api.toggleSavedPath.replace(':id', item.externalId);
       const response = await fetch(`${config.serverUrl}${togglePath}`, {
         method: 'POST',
@@ -65,29 +55,55 @@ export function FeedItemCard({ item, onRefresh }: FeedItemCardProps) {
         credentials: 'include',
       });
 
-      console.log('Toggle response:', { 
-        ok: response.ok, 
-        status: response.status 
-      });
-
       if (!response.ok) {
         const errorData = await response.json();
         console.error('Error response:', errorData);
         throw new Error('Failed to toggle saved status');
       }
 
-      setIsSaved(!isSaved);
-      console.log('Successfully toggled saved status to:', !isSaved);
-      
+      return response.json();
+    },
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: ['feedItems'] });
+      const previousItems = queryClient.getQueryData(['feedItems']);
+
+      // Optimistically update the item's saved status
+      queryClient.setQueryData(['feedItems'], (old: any) => {
+        if (!Array.isArray(old)) return old;
+        return old.map(feedItem => {
+          if (feedItem.externalId === item.externalId) {
+            return {
+              ...feedItem,
+              metadata: {
+                ...feedItem.metadata,
+                tags: isSaved
+                  ? feedItem.metadata.tags.filter((tag: Tag) => !tag.id.includes('global.saved'))
+                  : [...(feedItem.metadata.tags || []), { id: 'global.saved' }]
+              }
+            };
+          }
+          return feedItem;
+        });
+      });
+
+      return { previousItems };
+    },
+    onError: (err, variables, context) => {
+      if (context?.previousItems) {
+        queryClient.setQueryData(['feedItems'], context.previousItems);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['feedItems'] });
       if (onRefresh) {
-        console.log('Refreshing feed items');
         onRefresh();
       }
-    } catch (error) {
-      console.error('Error toggling saved status:', error);
-    } finally {
-      setIsSaving(false);
-    }
+    },
+  });
+
+  const toggleSaved = () => {
+    if (toggleSavedMutation.isPending) return;
+    toggleSavedMutation.mutate();
   };
 
   const openInChatGPT = () => {
@@ -208,6 +224,22 @@ Source: ${item.source.name} (${item.source.platform})`;
             >
               {item.source.name}
             </Typography>
+            {item.topics?.map(topic => (
+              <Chip 
+                key={topic} 
+                label={topic} 
+                size="small"
+                sx={{
+                  height: 20,
+                  bgcolor: 'primary.light',
+                  color: 'primary.contrastText',
+                  '& .MuiChip-label': {
+                    px: 1,
+                    fontSize: '0.75rem'
+                  }
+                }}
+              />
+            ))}
             {item.requires_background?.map(topic => (
               <Chip 
                 key={topic} 
@@ -257,7 +289,7 @@ Source: ${item.source.name} (${item.source.platform})`;
             <IconButton 
               size="small" 
               onClick={toggleSaved}
-              disabled={isSaving}
+              disabled={toggleSavedMutation.isPending}
             >
               {isSaved ? (
                 <BookmarkIcon fontSize="small" />

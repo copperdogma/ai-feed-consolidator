@@ -239,17 +239,16 @@ WHERE pg_stat_activity.datname = 'ai-feed-dev'
 # Generate new migration
 npx sequelize-cli migration:generate --name migration-name
 
-# Run migrations (development)
-DATABASE_URL=postgres://postgres:postgres@localhost:5432/ai-feed-dev npx sequelize-cli db:migrate
+# Set database URL for development (run this first, or add to your .bashrc/.zshrc)
+export DATABASE_URL="postgres://postgres:postgres@localhost:5432/ai-feed-dev"
 
-# Run migrations (test)
-DATABASE_URL=postgres://postgres:postgres@localhost:5432/ai-feed-test npx sequelize-cli db:migrate --env test
-
-# Run migrations (production)
-DATABASE_URL=$PROD_DATABASE_URL npx sequelize-cli db:migrate --env production
+# Run migrations
+npx sequelize-cli db:migrate                    # Development (uses DATABASE_URL)
+npx sequelize-cli db:migrate --env test         # Test environment
+npx sequelize-cli db:migrate --env production   # Production environment
 
 # Check migration status
-DATABASE_URL=postgres://postgres:postgres@localhost:5432/ai-feed-dev npx sequelize-cli db:migrate:status
+npx sequelize-cli db:migrate:status
 
 # Undo last migration
 npx sequelize-cli db:migrate:undo
@@ -257,6 +256,8 @@ npx sequelize-cli db:migrate:undo
 # Undo all migrations
 npx sequelize-cli db:migrate:undo:all
 ```
+
+Note: The database connection URLs should be configured in your project's config files or environment variables rather than passed directly in commands. For local development, you can set the DATABASE_URL environment variable as shown above.
 
 #### Migration Best Practices
 1. **Naming Convention**

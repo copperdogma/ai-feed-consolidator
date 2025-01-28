@@ -50,4 +50,9 @@ export interface ProcessedFeedItem extends FeedItem {
     type: ConsumptionType;
   };
   processedAt: Date;
+}
+
+export interface Tag {
+  id: string;
+  label?: string;
 } 

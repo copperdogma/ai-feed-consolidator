@@ -4,13 +4,6 @@
 
 NOTE: when a task and all sub-tasks are 100% complete, delete them from this file.
 
-## Completed Milestones
-- [x] Transition to Direct RSS Integration (20240428)
-  - [x] Remove all Feedly-specific code and references
-  - [x] Update documentation to reflect RSS-first approach
-  - [x] Verify all tests passing after transition
-  - [x] Clean up todo list and documentation
-
 ## Vertical Slice Features
 Core features needed to validate the primary use case:
 
@@ -72,22 +65,28 @@ Core features needed to validate the primary use case:
 
 ## Current Task
 - Fix Feed Display Issues
-  - [ ] Fix data flow and state management
-    - [ ] Implement proper transformFeedItem function
-    - [ ] Remove duplicate state management in App.tsx
-    - [ ] Add proper React Query configuration
-  - [ ] Verify API integration
-    - [ ] Verify /api/feed/items endpoint implementation
-    - [ ] Ensure consistent feed item transformation
-    - [ ] Add proper error handling and retries
-  - [ ] Refactor UI components
-    - [ ] Create dedicated FeedDisplay component
-    - [ ] Move source mapping to data transformation layer
-    - [ ] Improve loading and error states
-  - [ ] Enhance error handling
-    - [ ] Add error tracking and monitoring
-    - [ ] Implement proper retry logic
-    - [ ] Add user-friendly error messages
+  - [x] Fix data flow and state management
+    - [x] Implement proper transformFeedItem function
+    - [x] Remove duplicate state management
+      - [x] Refactor FeedManagement.tsx to use React Query mutations
+      - [x] Remove manual optimistic updates in handleToggleActive
+      - [x] Migrate FeedItemCard.tsx to use React Query for saved state
+      - [x] Implement proper error handling in mutations
+      - [x] Add retry logic for failed mutations
+      - [x] Remove local state duplicates for server-state (isSaved/isActive)
+    - [x] Add proper React Query configuration
+  - [x] Verify API integration
+    - [x] Verify /api/feed/items endpoint implementation
+    - [x] Ensure consistent feed item transformation
+    - [x] Add proper error handling and retries
+  - [x] Refactor UI components
+    - [x] Create dedicated FeedDisplay component
+    - [x] Move source mapping to data transformation layer
+    - [x] Improve loading and error states
+  - [x] Enhance error handling
+    - [x] Add error tracking and monitoring
+    - [x] Implement proper retry logic
+    - [x] Add user-friendly error messages
 
 ## Active Tasks
 
@@ -97,7 +96,7 @@ Core features needed to validate the primary use case:
 - [x] Implement feed validation
 - [x] Add feed health checks
 - [x] Create feed polling system
-- [ ] Add OPML import support
+- [x] Add OPML import support
 - [ ] Implement content deduplication
 - [ ] Add HTML content extraction
 - [ ] Handle media detection
@@ -141,17 +140,6 @@ Core features needed to validate the primary use case:
 4. Add HTML content extraction
 5. Handle media detection
 
-## Completed
-- [x] Initial project setup
-- [x] Create feed configuration schema
-- [x] Implement feed validation
-- [x] Add feed health checks
-- [x] Create feed polling system
-- [x] Implement user authentication with Google OAuth
-- [x] Add login history tracking
-- [x] Create robust database cleanup functionality
-- [x] Add transaction support for critical operations
-- [x] Improve test infrastructure and reliability
 
 ## Future Tasks
 - [ ] Add support for additional feed sources
@@ -279,42 +267,6 @@ Steps:
 - [ ] Additional content sources
 - [ ] Native mobile apps
 - [ ] Shared family features
-
-## Completed Items ✅
-- Infrastructure
-  - [x] Create application Dockerfile
-  - [x] Set up Docker Compose for local development
-  - [x] Configure PostgreSQL container
-  - [x] Configure environment variables (.env and .env.example)
-  - [x] Set up database migration system
-  - [x] Create initial authentication schema
-  - [x] Set up test infrastructure with Vitest
-  - [x] Configure JSDOM for frontend testing
-
-- Authentication
-  - [x] Set up Google OAuth 2.0 integration
-  - [x] Configure authentication middleware
-  - [x] Implement session management
-  - [x] Create authentication documentation
-  - [x] Implement comprehensive auth tests
-  - [x] Add logout flow testing
-  - [x] Add login history tracking implementation
-
-- Research
-  - [x] YouTube Integration research
-  - [x] Evaluate open-source solutions
-  - [x] Document findings in design.md
-
-- Testing
-  - [x] Optimize test database cleanup process
-  - [x] Fix transaction lock contention in tests
-  - [x] Reduce auth error test execution time
-  - [x] Improve session initialization reliability
-  - [x] Add retry mechanisms for flaky tests
-  - [x] Implement rate limiter with comprehensive tests
-  - [x] Add Feedly service error handling and retry tests
-  - [x] Fix authentication component tests
-  - [x] Add proper timer handling in async tests
 
 ## Bugs
 - No known bugs 

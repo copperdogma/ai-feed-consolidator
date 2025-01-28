@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Button,
@@ -20,12 +20,14 @@ import {
   CircularProgress,
   Alert,
   Tooltip,
+  Skeleton,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import WarningIcon from '@mui/icons-material/Warning';
+import FileUploadIcon from '@mui/icons-material/FileUpload';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 interface Feed {
@@ -54,6 +56,52 @@ interface EditFeedDialogProps {
   onSubmit: (feed: Partial<Feed>) => void;
   feed: Feed;
   isLoading: boolean;
+}
+
+interface APIError {
+  message: string;
+  details?: string;
+  status?: number;
+  code?: string;
+  retryable?: boolean;
+}
+
+interface MutationContext {
+  previousFeeds?: Feed[];
+}
+
+interface ImportResult {
+  added: number;
+  failed: number;
+  errors: Array<{ url: string; error: string }>;
+}
+
+async function handleAPIResponse(response: Response, errorMessage: string): Promise<any> {
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    const error: APIError = {
+      message: errorData.message || errorMessage,
+      details: errorData.details || response.headers.get('Retry-After'),
+      status: response.status,
+      code: errorData.code,
+      retryable: errorData.retryable,
+    };
+
+    if (response.status === 401) {
+      error.message = 'Please log in to continue';
+      error.retryable = false;
+    } else if (response.status === 403) {
+      error.message = 'You do not have permission to perform this action';
+      error.retryable = false;
+    } else if (response.status === 429) {
+      error.message = 'Rate limit exceeded. Please try again later.';
+      error.retryable = true;
+    }
+
+    throw error;
+  }
+
+  return response.json();
 }
 
 const AddFeedDialog: React.FC<AddFeedDialogProps> = ({
@@ -189,31 +237,139 @@ const EditFeedDialog: React.FC<EditFeedDialogProps> = ({
   );
 };
 
+const ImportResultDialog: React.FC<{
+  open: boolean;
+  onClose: () => void;
+  result: ImportResult;
+}> = ({ open, onClose, result }) => (
+  <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <DialogTitle>Import Results</DialogTitle>
+    <DialogContent>
+      <Typography variant="body1" gutterBottom>
+        Successfully imported {result.added} feed{result.added !== 1 ? 's' : ''}.
+      </Typography>
+      {result.failed > 0 && (
+        <>
+          <Typography variant="body1" color="error" gutterBottom>
+            Failed to import {result.failed} feed{result.failed !== 1 ? 's' : ''}.
+          </Typography>
+          <List>
+            {result.errors.map((error, index) => (
+              <ListItem key={index}>
+                <ListItemText
+                  primary={error.url}
+                  secondary={error.error}
+                  secondaryTypographyProps={{ color: 'error' }}
+                />
+              </ListItem>
+            ))}
+          </List>
+        </>
+      )}
+    </DialogContent>
+    <DialogActions>
+      <Button onClick={onClose}>Close</Button>
+    </DialogActions>
+  </Dialog>
+);
+
+const LoadingSkeleton = () => (
+  <List>
+    {[1, 2, 3].map((key) => (
+      <Card key={key} sx={{ mb: 2 }}>
+        <CardContent>
+          <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+            <Skeleton
+              variant="circular"
+              width={24}
+              height={24}
+              sx={{ mr: 1 }}
+              data-testid="skeleton"
+            />
+            <Skeleton
+              variant="text"
+              width="60%"
+              height={32}
+              data-testid="skeleton"
+            />
+          </Box>
+          <Skeleton
+            variant="text"
+            width="80%"
+            sx={{ mb: 1 }}
+            data-testid="skeleton"
+          />
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Skeleton
+              variant="text"
+              width={120}
+              data-testid="skeleton"
+            />
+            <Skeleton
+              variant="text"
+              width={100}
+              data-testid="skeleton"
+            />
+            <Box sx={{ flex: 1 }} />
+            <Skeleton
+              variant="rounded"
+              width={100}
+              height={24}
+              data-testid="skeleton"
+            />
+          </Box>
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1 }}>
+            <Skeleton
+              variant="circular"
+              width={40}
+              height={40}
+              sx={{ mr: 1 }}
+              data-testid="skeleton"
+            />
+            <Skeleton
+              variant="circular"
+              width={40}
+              height={40}
+              sx={{ mr: 1 }}
+              data-testid="skeleton"
+            />
+            <Skeleton
+              variant="circular"
+              width={40}
+              height={40}
+              data-testid="skeleton"
+            />
+          </Box>
+        </CardContent>
+      </Card>
+    ))}
+  </List>
+);
+
 export const FeedManagement: React.FC = () => {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [selectedFeed, setSelectedFeed] = useState<Feed | null>(null);
   const queryClient = useQueryClient();
   const [refreshError, setRefreshError] = useState<string | null>(null);
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch feeds
   const {
     data: feeds,
     isLoading,
     error,
-  } = useQuery<Feed[]>({
+  } = useQuery<Feed[], APIError>({
     queryKey: ['feeds'],
     queryFn: async () => {
       const response = await fetch('/api/feeds');
-      if (!response.ok) {
-        throw new Error('Failed to fetch feeds');
-      }
-      return response.json();
+      return handleAPIResponse(response, 'Failed to fetch feeds');
     },
   });
 
   // Add feed mutation
-  const addFeedMutation = useMutation<Feed, Error, string>({
+  const addFeedMutation = useMutation<Feed, APIError, string>({
     mutationFn: async (feedUrl: string) => {
       const response = await fetch('/api/feeds', {
         method: 'POST',
@@ -222,23 +378,20 @@ export const FeedManagement: React.FC = () => {
         },
         body: JSON.stringify({ feedUrl }),
       });
-      if (!response.ok) {
-        throw new Error('Failed to add feed');
-      }
-      return response.json();
+      return handleAPIResponse(response, 'Failed to add feed');
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['feeds'] });
       setAddDialogOpen(false);
     },
+    retry: (failureCount, error) => {
+      if (!error.retryable) return false;
+      return failureCount < 3;
+    },
   });
 
   // Update feed mutation
-  const updateFeedMutation = useMutation<
-    Feed,
-    Error,
-    { id: number } & Partial<Feed>
-  >({
+  const updateFeedMutation = useMutation<Feed, APIError, { id: number } & Partial<Feed>, MutationContext>({
     mutationFn: async ({ id, ...updates }) => {
       const response = await fetch(`/api/feeds/${id}`, {
         method: 'PATCH',
@@ -247,112 +400,124 @@ export const FeedManagement: React.FC = () => {
         },
         body: JSON.stringify(updates),
       });
-      if (!response.ok) {
-        throw new Error('Failed to update feed');
+      return handleAPIResponse(response, 'Failed to update feed');
+    },
+    onMutate: async ({ id, ...updates }) => {
+      await queryClient.cancelQueries({ queryKey: ['feeds'] });
+      const previousFeeds = queryClient.getQueryData<Feed[]>(['feeds']);
+      
+      queryClient.setQueryData<Feed[]>(['feeds'], old => 
+        old?.map(feed => feed.id === id ? { ...feed, ...updates } : feed) ?? []
+      );
+      
+      return { previousFeeds };
+    },
+    onError: (err, variables, context) => {
+      if (context?.previousFeeds) {
+        queryClient.setQueryData(['feeds'], context.previousFeeds);
       }
-      return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['feeds'] });
       setEditDialogOpen(false);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['feeds'] });
     },
   });
 
   // Delete feed mutation
-  const deleteFeedMutation = useMutation<void, Error, number>({
+  const deleteFeedMutation = useMutation<void, APIError, number, MutationContext>({
     mutationFn: async (id: number) => {
       const response = await fetch(`/api/feeds/${id}`, {
         method: 'DELETE',
       });
-      if (!response.ok) {
-        throw new Error('Failed to delete feed');
+      return handleAPIResponse(response, 'Failed to delete feed');
+    },
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: ['feeds'] });
+      const previousFeeds = queryClient.getQueryData<Feed[]>(['feeds']);
+      
+      queryClient.setQueryData<Feed[]>(['feeds'], old => 
+        old?.filter(feed => feed.id !== id) ?? []
+      );
+      
+      return { previousFeeds };
+    },
+    onError: (err, variables, context) => {
+      if (context?.previousFeeds) {
+        queryClient.setQueryData(['feeds'], context.previousFeeds);
       }
     },
-    onSuccess: () => {
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['feeds'] });
     },
   });
 
-  // Add refresh mutation
-  const refreshFeedMutation = useMutation<Feed, Error, number>({
+  // Refresh feed mutation
+  const refreshFeedMutation = useMutation<Feed, APIError, number>({
     mutationFn: async (id: number) => {
       const response = await fetch(`/api/feeds/${id}/refresh`, {
         method: 'POST'
       });
-      
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.details || 'Failed to refresh feed');
-      }
-      
-      return response.json();
+      return handleAPIResponse(response, 'Failed to refresh feed');
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['feeds'] });
     },
     onError: (error) => {
       console.error('Failed to refresh feed:', error);
-      // Show error in UI using alert instead of snackbar
       setRefreshError(error.message);
-    }
+    },
   });
 
-  // Add refresh handler
-  const handleRefreshFeed = async (id: number) => {
-    setRefreshError(null);
-    try {
-      await refreshFeedMutation.mutateAsync(id);
-    } catch (error) {
-      // Error is handled in onError
-    }
-  };
-
-  // Add optimistic updates for toggle
-  const handleToggleActive = async (feed: Feed, newState: boolean) => {
-    console.log('Toggle requested:', { feedId: feed.id, oldState: feed.isActive, newState });
-    
-    // Store the current state for potential revert
-    const currentState = feed.isActive ?? false;
-    
-    // Optimistically update the UI
-    queryClient.setQueryData<Feed[]>(['feeds'], (old) => {
-      const updated = old?.map(f => f.id === feed.id ? { ...f, isActive: newState } : f) ?? [];
-      console.log('Optimistic update:', { feedId: feed.id, newState, feeds: updated });
-      return updated;
-    });
-    
-    try {
-      // Make the API call
-      const response = await fetch(`/api/feeds/${feed.id}`, {
+  // Toggle active mutation
+  const toggleActiveMutation = useMutation<Feed, APIError, { id: number; isActive: boolean }, MutationContext>({
+    mutationFn: async ({ id, isActive }) => {
+      const response = await fetch(`/api/feeds/${id}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ isActive: newState }),
+        body: JSON.stringify({ isActive }),
       });
-      
-      if (!response.ok) {
-        throw new Error('Failed to update feed');
-      }
-      
-      const updatedFeed = await response.json();
-      console.log('API response:', { feedId: feed.id, serverState: updatedFeed.isActive });
-      
-      if (updatedFeed.isActive === undefined) {
-        throw new Error('Invalid server response');
-      }
-      
-      // Update with the server response
-      queryClient.setQueryData<Feed[]>(['feeds'], (old) => 
-        old?.map(f => f.id === feed.id ? { ...f, ...updatedFeed } : f) ?? []
+      return handleAPIResponse(response, 'Failed to update feed');
+    },
+    onMutate: async ({ id, isActive }) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ['feeds'] });
+
+      // Snapshot the previous value
+      const previousFeeds = queryClient.getQueryData<Feed[]>(['feeds']);
+
+      // Optimistically update to the new value
+      queryClient.setQueryData<Feed[]>(['feeds'], old => 
+        old?.map(feed => feed.id === id ? { ...feed, isActive } : feed) ?? []
       );
-    } catch (error) {
-      console.error('Toggle failed:', { feedId: feed.id, error });
-      // Revert optimistic update on error
-      queryClient.setQueryData<Feed[]>(['feeds'], (old) => 
-        old?.map(f => f.id === feed.id ? { ...f, isActive: currentState } : f) ?? []
-      );
-    }
+
+      // Return context with the previous value
+      return { previousFeeds };
+    },
+    onError: (err, variables, context) => {
+      // If the mutation fails, use the context returned from onMutate to roll back
+      if (context?.previousFeeds) {
+        queryClient.setQueryData(['feeds'], context.previousFeeds);
+      }
+    },
+    onSettled: () => {
+      // Always refetch after error or success to ensure we're in sync with server
+      queryClient.invalidateQueries({ queryKey: ['feeds'] });
+    },
+  });
+
+  // Replace handleToggleActive with simpler version using mutation
+  const handleToggleActive = (feed: Feed, newState: boolean) => {
+    toggleActiveMutation.mutate({ id: feed.id, isActive: newState });
+  };
+
+  // Add refresh handler
+  const handleRefreshFeed = (id: number) => {
+    setRefreshError(null);
+    refreshFeedMutation.mutate(id);
   };
 
   const handleAddFeed = (feedUrl: string) => {
@@ -370,19 +535,68 @@ export const FeedManagement: React.FC = () => {
     }
   };
 
+  const importOPML = async (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const response = await fetch('/api/feeds/import', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to import OPML file');
+      }
+
+      const result = await response.json();
+      setImportResult(result);
+      
+      // Refresh feed list if any feeds were added
+      if (result.added > 0) {
+        queryClient.invalidateQueries({ queryKey: ['feeds'] });
+      }
+    } catch (error) {
+      setRefreshError(error instanceof Error ? error.message : 'Failed to import OPML file');
+    }
+  };
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      importOPML(file);
+    }
+  };
+
   return (
     <Box sx={{ maxWidth: 800, margin: '0 auto', p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
         <Typography variant="h5" component="h1">
           RSS Feeds
         </Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => setAddDialogOpen(true)}
-        >
-          Add Feed
-        </Button>
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          <input
+            type="file"
+            accept=".opml,.xml"
+            onChange={handleFileChange}
+            style={{ display: 'none' }}
+            ref={fileInputRef}
+          />
+          <Button
+            variant="outlined"
+            startIcon={<FileUploadIcon />}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            Import OPML
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => setAddDialogOpen(true)}
+          >
+            Add Feed
+          </Button>
+        </Box>
       </Box>
 
       {error && (
@@ -403,10 +617,16 @@ export const FeedManagement: React.FC = () => {
         </Alert>
       )}
 
+      {importResult && (
+        <ImportResultDialog
+          open={true}
+          onClose={() => setImportResult(null)}
+          result={importResult}
+        />
+      )}
+
       {isLoading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-          <CircularProgress />
-        </Box>
+        <LoadingSkeleton />
       ) : (
         <List>
           {feeds?.map((feed) => (

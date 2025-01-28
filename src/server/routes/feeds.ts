@@ -5,10 +5,23 @@ import { logger } from '../logger';
 import { requireAuth } from '../middleware/auth';
 import { z } from 'zod';
 import { FeedItemService } from '../services/feed-item';
+import { OPMLService } from '../services/opml';
+import multer from 'multer';
 
 const router = Router();
 const rssService = new RSSService(pool);
 const feedItemService = new FeedItemService(pool);
+
+// Configure multer for file uploads
+const upload = multer({
+  limits: {
+    fileSize: 1024 * 1024, // 1MB limit
+    files: 1
+  }
+});
+
+// Initialize OPML service
+const opmlService = new OPMLService(pool);
 
 // Validation schemas
 const addFeedSchema = z.object({
@@ -252,6 +265,44 @@ router.get('/items', requireAuth, async (req, res) => {
   } catch (error) {
     logger.error({ error }, 'Error getting all feed items');
     res.status(500).json({ error: 'Failed to get feed items' });
+  }
+});
+
+/**
+ * Import feeds from OPML file
+ */
+router.post('/import', requireAuth, upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file || !req.file.buffer) {
+      res.status(400).json({ error: 'No file uploaded' });
+      return;
+    }
+
+    const opmlContent = req.file.buffer.toString('utf-8');
+    
+    logger.info({ 
+      userId: req.user!.id,
+      contentLength: opmlContent.length
+    }, 'Starting OPML import');
+
+    const result = await opmlService.importOPML(req.user!.id, opmlContent);
+    
+    logger.info({ 
+      userId: req.user!.id,
+      ...result
+    }, 'OPML import completed');
+
+    res.json(result);
+  } catch (error) {
+    logger.error({ 
+      error,
+      userId: req.user!.id
+    }, 'Error importing OPML file');
+    
+    res.status(500).json({ 
+      error: 'Failed to import OPML file',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
   }
 });
 

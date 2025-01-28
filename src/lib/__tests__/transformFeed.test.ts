@@ -30,7 +30,14 @@ describe('transformFeedItem', () => {
         platform: 'rss',
         url: 'https://example.com'
       },
-      media: [{ type: 'image', url: 'https://example.com/image.jpg' }],
+      media: [{ 
+        type: 'image', 
+        url: 'https://example.com/image.jpg',
+        width: undefined,
+        height: undefined,
+        contentType: undefined,
+        thumbnailUrl: undefined
+      }],
       topics: ['tech', 'news'],
       feed_config_id: 1,
       content_type: 'technical',
@@ -58,7 +65,14 @@ describe('transformFeedItem', () => {
         platform: 'rss',
         url: 'https://example.com'
       },
-      media: [{ type: 'image', url: 'https://example.com/image.jpg' }],
+      media: [{
+        type: 'image',
+        url: 'https://example.com/image.jpg',
+        width: undefined,
+        height: undefined,
+        contentType: undefined,
+        thumbnailUrl: undefined
+      }],
       topics: ['tech', 'news'],
       feedConfigId: 1,
       content_type: 'technical',
@@ -68,7 +82,8 @@ describe('transformFeedItem', () => {
         minutes: 10,
         type: 'read'
       },
-      processedAt: new Date('2024-01-01T00:00:00.000Z')
+      processedAt: new Date('2024-01-01T00:00:00.000Z'),
+      metadata: {}
     };
 
     expect(transformFeedItem(input)).toEqual(expected);

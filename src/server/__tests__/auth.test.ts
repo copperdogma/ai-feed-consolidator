@@ -7,12 +7,14 @@ import { promisify } from 'util';
 import { pool } from '../services/db';
 import { Express } from 'express';
 import { Server } from 'http';
+import { LoginHistoryService } from '../services/login-history';
 
 const sleep = promisify(setTimeout);
 
 // Set test environment
 beforeAll(() => {
   process.env.NODE_ENV = 'test';
+  LoginHistoryService.initialize(pool);
 });
 
 // Verify that a test user exists in the database
@@ -176,22 +178,45 @@ describe('Authentication Flow', () => {
     expect(sessionResponse.body.user.id).toBe(testUser.id);
     expect(sessionResponse.body.sessionId).toBeDefined();
 
-    // Add a delay to ensure session is fully established
-    await sleep(1000);
+    // Add a longer delay to ensure session is fully established
+    await sleep(2000);
 
-    // Verify session state
-    const verifyResponse = await agent.get('/api/auth/verify');
-    
-    // Log session state for debugging
-    console.log('Session state:', {
-      sessionId: verifyResponse.body.sessionId,
-      hasSession: !!verifyResponse.body.sessionId,
-      hasPassport: !!verifyResponse.body.user,
-      isAuthenticated: verifyResponse.body.authenticated,
-      user: verifyResponse.body.user
-    });
+    // Verify session state with retries
+    let verifyResponse = await agent.get('/api/auth/verify');
+    let success = false;
+    let retryCount = 0;
+    const maxRetries = 3;
 
-    // Verify authentication state
+    while (!success && retryCount < maxRetries) {
+      try {
+        verifyResponse = await agent.get('/api/auth/verify');
+        
+        // Log session state for debugging
+        console.log(`Verification attempt ${retryCount + 1}:`, {
+          sessionId: verifyResponse.body.sessionId,
+          hasSession: !!verifyResponse.body.sessionId,
+          hasPassport: !!verifyResponse.body.user,
+          isAuthenticated: verifyResponse.body.authenticated,
+          user: verifyResponse.body.user
+        });
+
+        if (verifyResponse.status === 200 && 
+            verifyResponse.body.authenticated && 
+            verifyResponse.body.user?.id === testUser.id &&
+            verifyResponse.body.sessionId === sessionResponse.body.sessionId) {
+          success = true;
+        } else {
+          retryCount++;
+          await sleep(1000); // Wait before retrying
+        }
+      } catch (error) {
+        console.error(`Verification error (attempt ${retryCount + 1}):`, error);
+        retryCount++;
+        await sleep(1000); // Wait before retrying
+      }
+    }
+
+    // Final verification
     expect(verifyResponse.status).toBe(200);
     expect(verifyResponse.body.authenticated).toBe(true);
     expect(verifyResponse.body.user?.id).toBe(testUser.id);

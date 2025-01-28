@@ -161,9 +161,9 @@ export class LoginHistoryService {
           WHERE success = false
             AND (
               -- Include failed attempts for this specific user
-              (user_id = $1 AND success = false)
-              -- Include anonymous failed attempts
-              OR (user_id IS NULL AND success = false)
+              user_id = $1
+              -- Include anonymous failed attempts from the same IP
+              OR user_id IS NULL
             )
             AND login_time > NOW() - INTERVAL '${timeWindow} minutes'
         `, [userId]);

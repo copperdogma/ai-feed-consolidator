@@ -105,10 +105,6 @@ module.exports = {
     await queryInterface.addIndex('user_preferences', ['user_id'], {
       name: 'idx_user_preferences_user'
     });
-    await queryInterface.addIndex('user_preferences', ['user_id', 'preference_key'], {
-      name: 'idx_user_preferences_key',
-      unique: true
-    });
 
     // Add comments
     await queryInterface.sequelize.query(`
