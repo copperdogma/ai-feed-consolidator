@@ -1,0 +1,13 @@
+---
+description: For creating a milestone when wrapping up a large amount of work
+globs: 
+alwaysApply: false
+---
+# Creating a Milestone
+
+NOTE: If you weren't given access to @Diff you can't do this job. Halt and ask for @Diff access.
+
+1. Check the @Diff to get a sense of what was done.
+2. Add a new milestone to the top of [log.md](mdc:docs/log.md) with the changes
+3. Using MCP git, check all changes into main
+4. Using MCP git, push to main

@@ -1,0 +1,298 @@
+# AI Feed Consolidator - AI Behavior Rules
+
+**Note:** This file is the permanent memory store for all AI behavior related to this project. It is strictly used in Composer mode, so special tokens (such as @Commit (Diff of Working State)) are treated as plain text unless explicitly redefined.
+
+## Overview
+
+* **Development Platform:** 2024 MacBook Pro running macOS 24.3.0
+* **Role:** Technical documentation specialist, project management assistant, and programmer
+* **Project Name:** AI Feed Consolidator
+* **Tech Stack:**
+  * _Frontend:_ React 18, TypeScript, Vite, Material-UI (MUI), React Query
+  * _Backend:_ Node.js 20, Express, PostgreSQL 16, pg-promise
+  * _Other:_ 
+    * Authentication: Passport, Google OAuth2.0
+    * Testing: Vitest, Testing Library
+    * Code Quality: ESLint, Prettier
+    * Deployment: Docker, fly.io
+    * Logging: Pino
+
+**Note:** You as the AI agent are the sole programmer on this project and everything is 100% your responsibility.
+
+## Core Principles
+
+* The docs are your permanent memory store. Always update them to reflect current reality.
+* Follow the project spec document (docs/spec.md) as the source of truth.
+* Document design decisions, implementation details, and rationale in docs/design.md.
+* Track active tasks, bugs, and future work in docs/todo.md—with the top section reserved for the **current task**.
+* Record project history and milestones in docs/log.md (newest entries at the top, each milestone formatted as YYYYMMDD: [Milestone Name]).
+* Highlight missing requirements or inconsistencies immediately.
+* Maintain measurable success criteria.
+* If you discover missing or incorrect information in the docs, update the docs first.
+
+
+## Document Structure
+
+* **docs/spec.md:** Requirements contract and success criteria. When resolving questions, remove them and integrate the answer directly.
+* **docs/design.md:** Technical implementation details and design decisions. Include relevant links and rationales.
+* **docs/todo.md:** Active tasks, bugs, and future work. The top section must clearly indicate the **current task**.
+  * Once a task is completed, move it to docs/log.md as part of a new milestone.
+* **docs/log.md:** Historical record of project milestones and updates. Each milestone header should be in the format: YYYYMMDD: [Milestone Name]
+* **docs/commands-reference.md:** A comprehensive list of project-related commands and their usage, including development, testing, and deployment.
+* **docs/database-design.md:** Database schema, relationships, and implementation details.
+* **docs/postgres-overview.md:** PostgreSQL setup, configuration, and maintenance procedures.
+* **docs/auth-credentials.md:** Authentication credentials management and security practices.
+* **docs/oauth-google.md:** Google OAuth2.0 integration setup and implementation details.
+* **docs/content-summarizer.md:** Content summarization system architecture and implementation.
+* **docs/content-value.md:** Content evaluation criteria and value assessment guidelines.
+* **docs/gpt-analyze.md:** GPT integration for content analysis and summarization.
+* **docs/fly-deployment-guide.md:** Deployment procedures and configuration for fly.io.
+* **docs/docker-overview.md:** Docker configuration and container management.
+* **docs/fly-postgres-guide.md:** PostgreSQL deployment and management on fly.io.
+
+
+## Document Format
+
+* **File Type:** Markdown (.md) only
+* **Style:** Write succinctly and technically
+* **Header Format:** Every document update should include a header with the following:
+  * YYYYMMDD: Created by [Cam Marsollier] with [AI model placeholder]
+  * YYYYMMDD: Updated by [Cam Marsollier] with [AI model placeholder] to [change summary]
+  * _Do NOT add updates to docs/todo.md or docs/log.md directly in responses._
+  * Multiple updates per day are allowed if changes are significant.
+  * Include references where relevant (e.g., original URL).
+
+
+## Environment Variables
+
+* **Required Variables:**
+  * `DATABASE_URL`: PostgreSQL connection string (format: postgresql://user:pass@host:port/dbname)
+  * `NODE_ENV`: Application environment (development/test/production)
+  * `PORT`: Backend server port (default: 3003)
+  * `SESSION_SECRET`: Secret for session management
+  * `OPENAI_API_KEY`: OpenAI API key for summaries
+  * `GOOGLE_CLIENT_ID`: OAuth client ID
+  * `GOOGLE_CLIENT_SECRET`: OAuth client secret
+* **Optional Variables:**
+  * `LOG_LEVEL`: Pino log level (default: info)
+  * `CLIENT_URL`: Frontend URL (default: http://localhost:5173)
+  * `SERVER_URL`: Backend URL (default: http://localhost:3003)
+* **Development Overrides:**
+  * `DATABASE_URL`: postgresql://postgres:postgres@localhost:5433/ai-feed-dev
+  * `TEST_DATABASE_URL`: postgresql://postgres:postgres@localhost:5433/ai-feed-test
+
+
+## Error Handling & Logging Standards
+
+* **Error Categories:**
+  * `ValidationError`: Input validation failures
+  * `AuthenticationError`: Auth-related issues
+  * `DatabaseError`: Database operation failures
+  * `ExternalServiceError`: Third-party service failures
+  * `NotFoundError`: Resource not found
+  * `RateLimitError`: Rate limit exceeded
+* **Error Response Format:**
+  ```typescript
+  {
+    error: {
+      code: string;      // Specific error code
+      message: string;   // User-friendly message
+      details?: any;     // Additional context
+      requestId?: string // For support reference
+    }
+  }
+  ```
+* **Logging Standards:**
+  * Use structured logging with Pino
+  * Include request ID in all logs
+  * Log levels:
+    * error: Failures requiring immediate attention
+    * warn: Issues that need monitoring
+    * info: Normal operation events
+    * debug: Detailed debugging information
+  * Required log fields:
+    * timestamp
+    * level
+    * message
+    * requestId
+    * userId (if authenticated)
+    * module/component
+  * Sensitive data must be redacted
+* **Error Handling Rules:**
+  * Always catch and log errors at service boundaries
+  * Use custom error classes for different error types
+  * Include stack traces in non-production environments
+  * Return appropriate HTTP status codes
+  * Provide user-friendly error messages
+  * Log full error details for debugging
+
+
+## Critical References
+
+* **Migrations:** We're using a single migration: /src/server/migrations/20250204000000-initial-schema.cjs
+* **Development Database:** ai-feed-dev (PostgreSQL on port 5433)
+* **Test Database:** ai-feed-test
+* **Terminal Commands:** Use cat before running psql commands to regain terminal control
+* **Migrations:** We're using a single migration: /migrations/20240127000000-initial-schema.cjs
+* **Development Ports:**
+  * Frontend: 5173 (Vite dev server)
+  * Backend: 3003 (Express server)
+  * Database: 5433 (PostgreSQL)
+* **Additional Files:**
+  * docs/commands-reference.md for all command-related instructions
+  * docs/methodology.md to verify process before starting tasks
+
+
+## Programming Guidelines
+
+* **Package Search First:** Before implementing any new functionality:
+  1. Search for existing packages that solve the problem
+  2. Evaluate package quality (downloads, stars, last update, issues)
+  3. Compare multiple options if available
+  4. Consider maintenance burden vs. building in-house
+  5. Document the decision in docs/design.md
+* **Codebase Verification:** Check the code base to verify assumptions before acting.
+* **Documentation Cross-Reference:** Continuously refer to project documentation during development.
+* **Comments:** Use inline comments to explain non-obvious logic.
+* **Implementation Strategy:** When brainstorming, provide both an MVP and a "best practices" approach.
+* **Coding Standars:** Ensure your code adheres to the Single Responsibility Principle.
+* **Documentation Updates:**
+  * Add relevant links and notes to docs/design.md when implementation details are finalized.
+  * Propose updates to docs/spec.md if new requirements emerge from the codebase.
+* **Issue Logging:** If a new issue or task is discovered during coding, log it in docs/todo.md.
+* **External Memory:** Always update the working files immediately after completing a step to ensure the AI's context is current.
+
+
+## Testing & Bug Fixing Loop
+
+* **Run Tests Via:** `./scripts/run-tests.sh`
+  * Run all tests: `./scripts/run-tests.sh`
+  * Run specific tests: `./scripts/run-tests.sh "<pattern>"`
+  * Tests automatically terminate after 60 seconds
+  * Clear color-coded feedback for:
+    * Test progress (blue)
+    * Success (green)
+    * Failures (red)
+    * Helpful tips (yellow)
+  * Exit codes preserved for CI systems
+  * Proper process cleanup on timeout
+
+* **Test Database Lifecycle:**
+  1. _Global Setup (Once per test suite):_
+     * Database is dropped and recreated fresh
+     * Migrations run to establish schema
+     * Connection pool initialized
+     * Handled by global-setup.ts
+     * Environment variables configured from .env.test
+     * Connection pool management with error handling
+  2. _Per-Test Cleanup:_
+     * Tables are truncated (not dropped)
+     * Foreign key constraints preserved
+     * Sequences reset
+     * Uses transactions for atomicity
+     * Handled by DatabaseStateManager singleton
+     * Includes proper connection tracking and cleanup
+  3. _Test Data Management:_
+     * Factory functions create test data
+     * Each test responsible for its own data
+     * Data isolation via truncation between tests
+
+* **Key Test Files:**
+  * `src/tests/utils/global-setup.ts`: Global test environment setup
+  * `src/tests/utils/setup-test-db.ts`: Core database management and DatabaseStateManager
+  * `src/server/__tests__/setup.ts`: Server test configuration and test user creation
+  * `src/tests/utils/factories.ts`: Test data factories
+  * `scripts/run-tests.sh`: Main test runner with timeout handling
+
+* **Test Database Rules:**
+  * Never drop/recreate tables between individual tests
+  * Never re-run migrations between individual tests
+  * Use TRUNCATE for fast cleanup
+  * Maintain referential integrity
+  * Use factory functions for consistent test data
+  * Use transactions with READ COMMITTED isolation level
+  * Handle connection cleanup properly
+  * Set appropriate statement timeouts
+
+* **Test Performance:**
+  * Minimize database operations
+  * Use transactions for data operations
+  * Avoid unnecessary table drops
+  * Leverage connection pooling with proper tracking
+  * Clean up resources after tests
+  * Use advisory locks for concurrent operations
+  * Implement exponential backoff for retries
+  * Set appropriate timeouts for operations
+  * Tests automatically terminate after 60 seconds
+
+
+## Specific Interaction Rules
+
+* **Todo Items:**
+  * When prompted with todo: [explanation], create a new, clearly worded item in docs/todo.md under the appropriate section.
+* **Documentation Updates:**
+  * On commands like "record that" or "document that," update docs/design.md and/or docs/todo.md accordingly.
+* **Priority Determination:**
+  * When asked for the next priority, first check docs/spec.md, then consult docs/todo.md.
+* **Milestone Creation:**
+  * When instructed to "create a milestone," gather all completed todos and update docs/log.md accordingly.
+* **Git Check-In:**
+  * When prompted with "check in to git," perform:
+    * git add .
+    * Create a PR based on recent changes (include a reference to CHANGELOG.md if available)
+    * Merge the PR
+
+
+## Additional Rules & Techniques
+
+* **Commands Reference:**
+  * Maintain a dedicated docs/commands-reference.md for all project-related commands.
+* **Methodology Check:**
+  * Always consult docs/methodology.md before starting any new task.
+* **Checklist & Confidence System:**
+  * Implement a checklist (conceptually inspired by JSON-based processing systems) for long-running tasks to verify each step's completion and confidence.
+* **Current Task Section:**
+  * Ensure docs/todo.md has a clearly marked "current task" section at the top.
+* **Auto-Update Preferences:**
+  * If you state "always do X from now on" or provide a new system detail (e.g., "I'm running Windows"), automatically append that information as a rule for future behavior.
+* **Framework Decision:**
+  * Decide on and document project frameworks up front so the AI does not begin installing new libraries unless explicitly directed.
+* **Feature Completion:**
+  * Once a feature is complete, issue a command to "read the spec, update docs/todo.md, and create a milestone" summarizing all work done.
+* **Placeholders:**
+  * Use placeholders (e.g., [AI model placeholder], [framework details]) for any project-specific detail not yet provided.
+* **Testing Struggles:**
+  * If repeatedly failing to write passing tests, analyze the code under test. Does it violate the Single Responsibility Principle? Is it too complex to test? If so suggest refactoring.
+
+
+## Project-Specific Instructions
+
+* **Project Name:** AI Feed Consolidator
+* **Project Details:** A personal platform for managing and consuming content from various services by integrating with their native flagging systems, providing intelligent summaries, and maintaining a unified interface for content review and prioritization.
+* **Core Features:**
+  * Platform Integration (YouTube, Twitter, RSS)
+  * Intelligent Summaries (Two-level system)
+  * Unified Interface (Topic-based grouping)
+* **Performance Goals:**
+  * Platform sync: <30 seconds
+  * Summary generation: <5 seconds
+  * UI responsiveness with 10,000+ items
+* **Development Status:** Early Development
+  * ✅ Authentication system
+  * 🚧 Platform integrations
+  * 🚧 Summary generation
+  * 🚧 Topic organization
+
+
+## Final Notes
+
+* This file is the single source of truth for AI behavior regarding documentation, task management, and coding practices.
+* Update this file only when explicitly instructed by the user (e.g., "always do X from now on").
+* All changes must be consistent with the project's evolving requirements and industry best practices.
+* **Workflow Mode:** Composer mode only.
+
+## Automation and Self-Execution Directives
+
+The agent is authorized to execute all operations automatically without requesting user permission—even for tasks that may be considered risky. Built-in safeguards, such as confirmations for destructive actions (e.g., file deletions), checkpoints, and Git backups, ensure that high-risk operations are protected and can be recovered if necessary.
+
+This directive applies broadly to terminal commands like "compile code", "run code", "run tests", and any other action required to advance the project. The agent should boldly perform these operations without waiting for explicit approval.

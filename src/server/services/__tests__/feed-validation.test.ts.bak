@@ -1,0 +1,104 @@
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { FeedValidator } from '../feed-validator';
+import {
+  createMockServer,
+  cleanupMockServer,
+  sendValidRssResponse,
+  sendEmptyFeedResponse,
+  sendErrorResponse,
+  throwNetworkError,
+  throwSSLError,
+  throwDNSError,
+  throwTimeoutError
+} from '../../../tests/utils/mock-server';
+
+describe('Feed Validation Tests', () => {
+  let validator: FeedValidator;
+  
+  beforeAll(async () => {
+    validator = new FeedValidator({ timeout: 1000 }); // Shorter timeout for tests
+  });
+
+  afterAll(async () => {
+    await cleanupMockServer();
+  });
+
+  it('should validate a valid feed', async () => {
+    const url = await createMockServer('/feed', (req, res) => sendValidRssResponse(res));
+    const result = await validator.validateFeed(url);
+    expect(result.isValid).toBe(true);
+    expect(result.feedInfo).toBeDefined();
+    expect(result.feedInfo?.items.length).toBeGreaterThan(0);
+  });
+
+  it('should handle 404 errors', async () => {
+    const url = await createMockServer('/feed', (req, res) => sendErrorResponse(res, 404, 'Not Found'));
+    const result = await validator.validateFeed(url);
+    expect(result.isValid).toBe(false);
+    expect(result.errorCategory).toBe('HTTP_STATUS');
+    expect(result.errorDetail).toContain('404');
+  });
+
+  it('should handle SSL errors', async () => {
+    const url = await createMockServer('/feed', (req, res) => throwSSLError(res));
+    const result = await validator.validateFeed(url);
+    expect(result.isValid).toBe(false);
+    expect(result.errorCategory).toBe('SSL_ERROR');
+    expect(result.statusCode).toBe(525);
+  });
+
+  it('should handle invalid XML', async () => {
+    const url = await createMockServer('/feed', (req, res) => {
+      res.writeHead(200, { 'Content-Type': 'application/xml' });
+      res.end('This is not valid XML');
+    });
+    const result = await validator.validateFeed(url);
+    expect(result.isValid).toBe(false);
+    expect(result.errorCategory).toBe('PARSE_ERROR');
+  });
+
+  it('should handle empty responses', async () => {
+    const url = await createMockServer('/feed', (req, res) => {
+      res.writeHead(204, { 'Content-Type': 'text/plain' });
+      res.end();
+    });
+    const result = await validator.validateFeed(url);
+    expect(result.isValid).toBe(false);
+    expect(result.errorCategory).toBe('EMPTY_RESPONSE');
+    expect(result.errorDetail).toBe('Empty response received');
+  });
+
+  it('should handle DNS errors', async () => {
+    const url = await createMockServer('/feed', (req, res) => throwDNSError(res));
+    const result = await validator.validateFeed(url);
+    expect(result.isValid).toBe(false);
+    expect(result.errorCategory).toBe('DNS_ERROR');
+    expect(result.statusCode).toBe(523);
+  });
+
+  it('should handle timeouts', async () => {
+    const url = await createMockServer('/feed', (req, res) => throwTimeoutError(res));
+    const result = await validator.validateFeed(url);
+    expect(result.isValid).toBe(false);
+    expect(result.errorCategory).toBe('TIMEOUT');
+    expect(result.statusCode).toBe(408);
+  });
+
+  it('should handle network errors', async () => {
+    const url = await createMockServer('/feed', (req, res) => throwNetworkError(res));
+    const result = await validator.validateFeed(url);
+    expect(result.isValid).toBe(false);
+    expect(result.errorCategory).toBe('NETWORK_ERROR');
+    expect(result.statusCode).toBe(503);
+  });
+
+  it('should handle 403 errors from Kijiji', async () => {
+    const url = await createMockServer('/feed', (req, res) => sendErrorResponse(res, 403, 'Forbidden'));
+    const result = await validator.validateFeed(url.replace('localhost', 'www.kijiji.ca'));
+    expect(result.isValid).toBe(false);
+    expect(result.errorCategory).toBe('HTTP_STATUS');
+    expect(result.errorDetail).toContain('403');
+    expect(result.requiresSpecialHandling).toBe(true);
+    expect(result.specialHandlerType).toBe('KIJIJI');
+  });
+});

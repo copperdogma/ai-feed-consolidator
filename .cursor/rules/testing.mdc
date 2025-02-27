@@ -1,0 +1,270 @@
+---
+description: Guidelines for testing practices in the AI Feed Consolidator project, ensuring adherence to best practices for all test files.
+globs: src/tests/**/*
+alwaysApply: false
+---
+# Testing Guidelines for AI Feed Consolidator
+
+## Test Architecture
+### Base Classes:
+- `UnitTestBase`: For tests without database dependencies
+- `IntegrationTestBase`: For tests requiring database access
+- `TestFixture`: For reusable test data patterns
+
+### Directory Structure:
+```
+/tests
+  /unit           // No DB access needed
+  /integration    // DB access required
+    /api          // API endpoint tests
+    /services     // Service integration tests
+    /repositories // Repository tests
+  /fixtures       // Shared test data
+  /utils          // Test utilities
+```
+
+## Test Database Lifecycle
+### Global Setup (Once per test suite):
+- Database is dropped and recreated fresh
+- Migrations run to establish schema
+- Connection pool initialized
+- Handled by `src/tests/utils/global-setup.ts`
+- Environment variables configured from `.env.test`
+- Connection pool management with error handling
+
+### Per-Test Cleanup:
+- Tables are truncated (not dropped)
+- Foreign key constraints preserved
+- Sequences reset
+- Uses transactions for atomicity
+- Handled by `DatabaseStateManager` singleton
+- Includes proper connection tracking and cleanup
+
+### Test Data Management:
+- Factory functions create test data
+- Each test responsible for its own data
+- Data isolation via truncation between tests
+- **Always verify data creation** with follow-up queries
+- Use proper logging to track data creation steps
+
+## Database Query Best Practices
+- **Always use pg-promise methods** (oneOrNone, manyOrNone) instead of raw pool.query
+- Add explicit verification after data creation operations
+- Handle potential nulls with proper checks
+- Use proper error handling with try/catch blocks
+- Log query parameters and results for debugging
+- Keep transaction scopes as small as possible
+
+## Service Container Management
+- Register services in dependency order to prevent initialization errors
+- Allow re-registration of core services in test environments
+- Use a consistent service initialization pattern
+- Verify service initialization before test execution
+- Consider using per-test service instances for isolation
+
+## Mock Request Handling
+- Use MSW (Mock Service Worker) for HTTP request mocking
+- Configure with `onUnhandledRequest: 'error'` to catch unhandled requests
+- Define explicit mock handlers for all expected requests
+- Create handlers for error scenarios (404, 500, etc.)
+- Use separate server instances per test class
+- Set up explicit cleanup in afterAll hooks
+
+## Test Database Rules:
+- Never drop/recreate tables between individual tests
+- Never re-run migrations between individual tests
+- Use TRUNCATE for fast cleanup
+- Maintain referential integrity
+- Use factory functions for consistent test data
+- Use transactions with READ COMMITTED isolation level
+- Handle connection cleanup properly
+- Set appropriate statement timeouts
+- Always use TransactionManager for db operations
+
+## Transaction Management
+- Use TransactionManager consistently across all database operations
+- Never mix direct pool queries with transaction manager operations
+- Ensure proper error handling within transactions
+- Implement proper client release in all transaction paths
+- Use read transactions for queries, write transactions for mutations
+
+## Testing Error Scenarios
+- Create specific tests for each error case
+- Use mock handlers to simulate different HTTP error status codes
+- Verify error handling behavior with expect().rejects.toThrow()
+- Check that no invalid data is created during error scenarios
+- Validate expected error recovery mechanisms
+- Test that resources are properly cleaned up
+- Make assertions about error-specific side effects
+- For network errors, test with both 404 (not found) and 500/503 (server errors)
+
+## Test Performance:
+- Minimize database operations
+- Use transactions for data operations
+- Avoid unnecessary table drops
+- Leverage connection pooling with proper tracking
+- Clean up resources after tests
+- Use advisory locks for concurrent operations
+- Implement exponential backoff for retries
+- Set appropriate timeouts for operations
+- Tests automatically terminate after 60 seconds
+
+## Key Test Files:
+- `src/tests/utils/global-setup.ts`: Global test environment setup
+- `src/tests/utils/setup-test-db.ts`: Core database management and DatabaseStateManager
+- `src/tests/utils/test-data-factory.ts`: Factory functions for test data creation
+- `src/tests/utils/IntegrationTestBase.ts`: Base class for integration tests
+- `src/tests/utils/UnitTestBase.ts`: Base class for unit tests
+- `scripts/run-tests.sh`: Main test runner with timeout handling
+
+## Test User Creation
+- Use TestDataFactory for consistent user creation
+- Add verification steps after user creation
+- Include proper logging throughout the process
+- Handle potential errors explicitly
+- Initialize TestDataFactory before use
+
+## Tips From RSS Integration Test Success
+- Always register the TransactionManager first before other services
+- When testing feed functionality, create explicit mock handlers for all URL patterns
+- Use constants for test URLs to maintain consistency across test and mock handlers
+- Verify database state after operations with explicit queries
+- Test error paths by ensuring that no database records are created
+- Use specific error types (e.g., RSSFetchError) in expect().rejects.toThrow() assertions
+- Add logging at key points for better debugging of test failures
+
+## Test Execution and Failure Handling
+- Run tests using `./scripts/run-tests.sh` (all tests) or `./scripts/run-tests.sh "<pattern>"` (specific tests).
+- After tests complete, categorize and report results, then triage failures to determine which to address first.
+- If tests fail repeatedly:
+  - Check if the code being tested is a monolith needing refactoring or violates the Single Responsibility Principle, making it buggy or untestable.
+  - Evaluate if the testing approach needs adjustment.
+  - If confident the code is correct, add debug statements to identify expected output.
+  - Proceed to fix the highest priority issue without seeking permission or confirmation.
+- Ensure tests terminate after 60 seconds, provide color-coded feedback (blue for progress, green for success, red for failures, yellow for tips), preserve exit codes for CI, and clean up processes on timeout.
+
+## Common Integration Test Patterns
+### Service Integration Tests:
+```typescript
+class ServiceTest extends IntegrationTestBase {
+  private service!: ExampleService;
+  protected server: ReturnType<typeof setupServer>;
+  private testUser: any;
+
+  constructor() {
+    super();
+    // Initialize MSW server
+    this.server = setupServer();
+  }
+
+  public async setup() {
+    await super.setup();
+    
+    // Register services in dependency order
+    const transactionManager = TransactionManager.getInstance(this.container);
+    this.container.register('transactionManager', transactionManager);
+    this.container.registerFactory('exampleRepository', () => new ExampleRepository(this.container));
+    this.container.registerFactory('exampleService', (c) => new ExampleService(c));
+    
+    // Get service from container
+    this.service = this.container.getService<ExampleService>('exampleService');
+    
+    // Setup mock handlers
+    this.server.use(
+      http.get('http://example.com/api', () => {
+        return new HttpResponse(JSON.stringify({ data: 'test' }), {
+          headers: { 'Content-Type': 'application/json' },
+          status: 200
+        });
+      }),
+      // Add error scenario handlers
+      http.get('http://error.example.com/api', () => {
+        return new HttpResponse(null, { status: 500 });
+      })
+    );
+    
+    await this.server.listen({ onUnhandledRequest: 'error' });
+  }
+  
+  public async cleanup() {
+    await this.server.close();
+    await super.cleanup();
+  }
+  
+  public async setupTestUser() {
+    try {
+      // Create test user via TestDataFactory
+      this.testUser = await this.testDataFactory.createUser({
+        google_id: 'test-google-id',
+        email: 'test@example.com',
+        display_name: 'Test User'
+      });
+      
+      // Verify user was created
+      const pool = this.dbManager.getPool();
+      const verifyUser = await pool.oneOrNone('SELECT * FROM users WHERE id = $1', [this.testUser.id]);
+      if (!verifyUser) {
+        throw new Error('Failed to verify user creation');
+      }
+    } catch (error) {
+      console.error('Error in setupTestUser:', error);
+      throw error;
+    }
+  }
+}
+```
+
+### Testing Error Scenarios Example (from RSS tests):
+```typescript
+it('should handle invalid feed URLs', async () => {
+  const service = testInstance.getService();
+  const testUser = testInstance.getTestUser();
+  const pool = testInstance.getPool();
+
+  const feedUrl = 'http://nonexistent.example.com/feed.xml';
+  await expect(service.addFeed(testUser.id, feedUrl)).rejects.toThrow();
+
+  // Verify no feed config was created
+  const configs = await pool.manyOrNone('SELECT * FROM feed_configs WHERE user_id = $1', [testUser.id]);
+  expect(configs.length).toBe(0);
+});
+
+it('should handle network errors gracefully', async () => {
+  const service = testInstance.getService();
+  const testUser = testInstance.getTestUser();
+  const pool = testInstance.getPool();
+
+  const feedUrl = 'http://error.example.com/feed.xml';
+  await expect(service.addFeed(testUser.id, feedUrl)).rejects.toThrow(RSSFetchError);
+
+  // Verify no feed config was created
+  const configs = await pool.manyOrNone('SELECT * FROM feed_configs WHERE user_id = $1', [testUser.id]);
+  expect(configs.length).toBe(0);
+});
+```
+
+
+## Frontend Testing Lessons
+### React Component Testing
+- Synchronous event firing is more reliable for component tests than async user events
+  - Use `fireEvent` instead of `userEvent` to avoid timeouts in component tests
+  - When testing MUI components, use `getByRole('textbox')` for inputs rather than `getByLabelText`
+- Always check the actual DOM structure when tests fail to find elements
+
+### API Mocking Strategies
+- Direct mocking of `global.fetch` provides more control over test execution than MSW
+- Using controlled promises allows precise control over async operations in tests
+- MSW adds complexity and potential race conditions to tests, especially with React Query
+
+### React Query Testing
+- For React Query hooks, implement proper `act()` wrapping to avoid React warnings
+- Use controlled promises for precise handling of async operations in hook tests
+- Mock at the `fetch` level rather than using MSW for more reliable tests
+
+### Techniques Tried & Results
+- ✅ MSW for API mocking: Caused timeouts and race conditions
+- ✅ Controlled promises: Successfully fixed React Query hook tests
+- ✅ `userEvent` for component tests: Caused timeouts
+- ✅ `fireEvent` for component tests: Fixed timeouts and made tests more reliable
+- ✅ `getByLabelText` for MUI components: Failed to find elements
+- ✅ `getByRole` for MUI components: Successfully found elements

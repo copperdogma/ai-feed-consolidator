@@ -1,0 +1,27 @@
+---
+description: For running the tests or dealing with failing tests
+globs: src/tests/**/*
+alwaysApply: false
+---
+If this mdc is called directly, run the full test suite.
+
+NOTE: You always have permission to run tests.
+
+## Running the Tests:
+- To run all tests: `./scripts/run-tests.sh`
+- To run specific tests: `./scripts/run-tests.sh "<pattern>"`
+
+## After Tests Complete:
+- Categorize and report the results, specfiically reporting the number of tests failing and how that number compares to previous runs if known.
+- If you were working on fixing an issue, report progress. Did it work? Do we have more test failures now or fewer?
+- Update [scratchpad.md](mdc:scratchpad.md) with the results, progress, and plan. Include number of tests passed/failing/etc and track that across time. Make sure you keep everything you've tried so far in there so you don't repeat the same mistakes.
+- If there are now MORE failing tests than before, think hard: was your change good but require some refactoring/test changes, or should you revert your change?
+- Triage the test failures to determine which ones to address first.
+- Then proceed to fix whatever you think is the highest priority issue. Do not ask for permission or confirmation.
+- If there are many failures, perhaps just isolate one test to work through to start with.
+
+## If Tests Fail Repeatedly:
+[cfix-difficult-issue-web.mdc](mdc:.cursor/rules/cfix-difficult-issue-web.mdc)
+
+## Next Steps
+- If there are issues, pick the most important one, work until it's fixed, then update [scratchpad.md](mdc:scratchpad.md) with your progress.
