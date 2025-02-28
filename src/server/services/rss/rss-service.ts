@@ -165,15 +165,20 @@ export class RSSService {
    * Update all feeds that are due for update
    */
   async updateFeeds(): Promise<void> {
-    const feeds = await this.repository.getFeedsDueForUpdate();
-    logger.info({ feedCount: feeds.length }, 'Starting feed updates');
+    try {
+      const feeds = await this.repository.getFeedsDueForUpdate();
+      logger.info({ feedCount: feeds.length }, 'Starting feed updates');
 
-    for (const feed of feeds) {
-      try {
-        await this.updateFeed(feed);
-      } catch (error) {
-        logger.error({ error, feedId: feed.id }, 'Error updating feed');
+      for (const feed of feeds) {
+        try {
+          await this.updateFeed(feed);
+        } catch (error) {
+          logger.error({ error, feedId: feed.id }, 'Error updating feed');
+        }
       }
+    } catch (error) {
+      // This should not happen now that fetchFeeds returns an empty array instead of throwing
+      logger.error({ error }, 'Unexpected error in updateFeeds');
     }
   }
 

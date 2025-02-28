@@ -399,3 +399,51 @@ psql -p 5433 -l | grep ai-feed
 # Test connection directly
 psql postgres://postgres:postgres@localhost:5433/ai-feed-dev -c "SELECT 1"
 ```
+
+### Running the Application
+
+#### Development Mode
+
+```bash
+# Start development server (frontend and backend)
+npm run dev
+
+# Start development server and pipe output to cat (useful for viewing logs)
+npm run dev | cat
+
+# Start development server in background
+npm run dev &
+
+# View logs while application is running
+tail -f logs/app.log
+
+# Filter logs for errors
+grep -i error logs/app.log
+
+# Clear logs before starting the application
+echo "" > logs/app.log && npm run dev
+```
+
+#### Best Practices
+
+1. **Running in Foreground vs Background**:
+   - When running `npm run dev` directly, the process runs in the foreground and doesn't return control to the terminal
+   - Use `npm run dev &` to run in the background and regain terminal control
+   - Use `npm run dev | cat` to view logs in real-time while maintaining terminal control
+
+2. **Log Management**:
+   - Always check logs for errors after starting the application
+   - Clear logs before starting to isolate new issues: `echo "" > logs/app.log`
+   - Use `tail -f logs/app.log` to follow logs in real-time
+   - Filter logs for specific information: `grep -i error logs/app.log`
+
+3. **Process Management**:
+   - Use `lsof -ti:3003,5173` to find processes using the development ports
+   - Kill processes using the ports: `lsof -ti:3003,5173 | xargs kill -9`
+   - The cleanup script is automatically run before starting: `npm run cleanup`
+
+4. **Troubleshooting**:
+   - If the application doesn't start, check logs for errors
+   - Verify database connection by checking logs for "Connected to database"
+   - Ensure ports 3003 (backend) and 5173 (frontend) are available
+   - Check for TypeScript errors with `npm run type-check`

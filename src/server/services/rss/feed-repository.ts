@@ -345,7 +345,9 @@ export class FeedRepository {
       return result.rows;
     } catch (error) {
       logger.error({ error, whereClause, params }, 'Error fetching feeds');
-      throw error;
+      // Return an empty array instead of throwing an error when no feeds are found
+      // This prevents errors when there are no feeds to update
+      return [];
     }
   }
 

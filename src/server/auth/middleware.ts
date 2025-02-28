@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction, RequestHandler } from 'express';
 import { logger } from '../logger';
 import { LoginHistoryService } from '../services/login-history';
-import { ServiceContainer } from '../services/service-container';
+import { getServiceContainer } from '../services/service-container';
 
 // Extend Express Request type
 declare module 'express' {
@@ -15,11 +15,12 @@ declare module 'express' {
   }
 }
 
-export const requireAuth = (container: ServiceContainer): RequestHandler => {
-  const loginHistoryService = container.getService<LoginHistoryService>('loginHistoryService');
+export const requireAuth = (req: Request, res: Response, next: NextFunction): void => {
+  try {
+    const container = getServiceContainer();
+    const loginHistoryService = container.getService<LoginHistoryService>('loginHistoryService');
 
-  return (req: Request, res: Response, next: NextFunction): void => {
-    if (!req.session?.user) {
+    if (!req.isAuthenticated || !req.isAuthenticated()) {
       // Only record failed login attempts for paths that look like login attempts
       if (req.path.toLowerCase().includes('login') || req.path.toLowerCase().includes('auth')) {
         const userAgent = (req.get('user-agent') || 'unknown') as string;
@@ -44,7 +45,15 @@ export const requireAuth = (container: ServiceContainer): RequestHandler => {
       return;
     }
     next();
-  };
+  } catch (error) {
+    logger.error({ error }, 'Error in requireAuth middleware');
+    res.status(500).json({
+      error: {
+        code: 'SERVER_ERROR',
+        message: 'Internal server error'
+      }
+    });
+  }
 };
 
 export function addRequestInfo(req: Request, res: Response, next: NextFunction): void {

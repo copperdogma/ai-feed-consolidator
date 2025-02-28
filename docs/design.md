@@ -516,6 +516,79 @@ Optional fields:
    - Retry logic for failed fetches
    - Error count tracking
    - Feed health monitoring
+   - Robust database query error handling
+   - Comprehensive logging for debugging
+   - Null/undefined checks for all external data
+   - Graceful degradation on failure
+
+### Error Handling Best Practices
+
+Based on our experience with the feed polling system, we've established these error handling principles:
+
+1. **Defensive Programming**
+   - Always check for null/undefined values when processing external data
+   - Use optional chaining and nullish coalescing operators for safer access
+   - Implement proper type checking before accessing properties
+   - Add guard clauses at the beginning of functions to handle edge cases
+
+2. **Comprehensive Logging**
+   - Log detailed error information including context and stack traces
+   - Use structured logging with proper error objects
+   - Include relevant parameters and query information
+   - Add debug logging for complex operations to aid troubleshooting
+   - Log both the error message and the complete error object
+
+3. **Graceful Degradation**
+   - Design systems to continue functioning when components fail
+   - Implement fallback mechanisms for critical operations
+   - Return sensible defaults when operations fail
+   - Avoid cascading failures by isolating error-prone components
+
+4. **Error Classification**
+   - Categorize errors by type and severity
+   - Handle different error types appropriately
+   - Distinguish between recoverable and non-recoverable errors
+   - Implement specific handling for common error scenarios
+
+5. **Testing Error Scenarios**
+   - Create comprehensive tests for error conditions
+   - Mock failure scenarios to verify error handling
+   - Test edge cases like empty results and malformed data
+   - Verify logging and error reporting in tests
+
+Example implementation:
+```typescript
+async function safeOperation() {
+  try {
+    // Attempt the operation
+    const result = await performOperation();
+    
+    // Verify result integrity
+    if (!result || !result.data) {
+      logger.warn('Operation returned incomplete data', { result });
+      return getDefaultValue();
+    }
+    
+    return processResult(result);
+  } catch (error) {
+    // Log detailed error information
+    logger.error('Operation failed', { 
+      error, 
+      operation: 'performOperation',
+      context: getCurrentContext()
+    });
+    
+    // Handle specific error types
+    if (error instanceof DatabaseError) {
+      await reconnectDatabase();
+      return getDefaultValue();
+    }
+    
+    // Return sensible default for other errors
+    return getDefaultValue();
+  }
+}
+```
 
 4. Performance Optimization
    - Efficient polling scheduling
@@ -657,78 +730,77 @@ Optional fields:
    Content Extraction
    ```
 
-4. Special Cases
-   - Kijiji Feeds: Custom handler with proper authentication
-   - Legacy Feeds: Format normalization layer
-   - Protected Feeds: Authentication management
-   - Redirected Feeds: URL update mechanism
+## Application Verification and Testing
 
-### Next Steps
-1. Implement feed health tracking system
-2. Create Kijiji-specific feed handler
-3. Add XML sanitization and normalization
-4. Enhance error recovery system
-5. Update feed validation pipeline 
+Based on our experience with the feed polling system, we've established these verification principles:
+
+### Verification Approaches
+
+1. **Log-Based Verification**
+   - Always verify application behavior by checking logs, not just by running tests
+   - Use structured logging to make log analysis easier
+   - Include context information in logs for better debugging
+   - Add debug logs for complex operations to aid troubleshooting
+
+2. **Multi-Level Testing**
+   - Unit tests for individual components
+   - Integration tests for component interactions
+   - End-to-end tests for complete workflows
+   - Test both success and failure scenarios
+   - Test edge cases and boundary conditions
+
+3. **Test Environment Management**
+   - Ensure test environment closely matches production
+   - Reset test environment between test runs
+   - Use proper database cleanup procedures
+   - Manage test data carefully to avoid test interference
+
+4. **Continuous Verification**
+   - Run tests automatically on code changes
+   - Monitor application logs in development and production
+   - Implement health checks for critical components
+   - Set up alerts for unexpected behavior
+
+### Best Practices
+
+1. **Running the Application**
+   - Run the application in development mode to verify behavior
+   - Check logs for errors and unexpected behavior
+   - Verify database connections and operations
+   - Monitor resource usage and performance
+
+2. **Testing Edge Cases**
+   - Test with empty databases
+   - Test with malformed data
+   - Test with unexpected input
+   - Test with resource constraints
+
+3. **Debugging Techniques**
+   - Add temporary debug logs for troubleshooting
+   - Use structured logging for better analysis
+   - Check database state during operations
+   - Monitor network requests and responses
+
+Example verification workflow:
+```bash
+# Clear logs before starting
+echo "" > logs/app.log
+
+# Start the application
+npm run dev &
+
+# Wait for application to initialize
+sleep 5
+
+# Check logs for errors
+grep -i error logs/app.log
+
+# Verify expected behavior
+grep -i "Server listening" logs/app.log
+grep -i "Connected to database" logs/app.log
+
+# Monitor ongoing operations
+tail -f logs/app.log
+```
 
 ## Test Setup Process
-
-The test harness follows best practices for database management:
-
-1. **Global Setup (Once per test run)**
-   - Drop and recreate test database
-   - Run migrations using custom migration runner
-   - Initialize connection pool with proper configuration
-   - Set up global cleanup hooks
-
-2. **Database Management**
-   - Uses raw SQL migrations for schema management
-   - Maintains migration history in custom migrations table
-   - Leverages Umzug for migration orchestration
-   - Proper transaction handling for data consistency
-
-3. **Per-Test Setup**
-   - Truncates all tables (maintaining schema)
-   - Resets sequences for primary keys
-   - Uses transactions for atomic operations
-   - Maintains foreign key constraints
-
-4. **Test Data Factory System**
-   - Provides factory functions for all models
-   - Supports override parameters for flexibility
-   - Handles relationships automatically
-   - Maintains referential integrity
-
-5. **Cleanup Process**
-   - Truncates tables between tests
-   - Maintains database schema
-   - Releases connections properly
-   - Efficient cleanup without migration rollbacks
-
-Required Environment Variables:
-- TEST_DATABASE_URL=postgres://postgres:postgres@localhost:5432/ai-feed-test
-- NODE_ENV=test
-
-Example Test Setup:
-```typescript
-// Global setup (once per test run)
-async function globalSetup() {
-  const pool = new Pool({
-    connectionString: process.env.TEST_DATABASE_URL,
-    statement_timeout: 30000
-  });
-  await pool.query('DROP DATABASE IF EXISTS "ai-feed-test";');
-  await pool.query('CREATE DATABASE "ai-feed-test";');
-  await runMigrations();
-}
-
-// Per-test setup
-async function setupTest() {
-  await pool.query('BEGIN');
-  await pool.query('SET CONSTRAINTS ALL DEFERRED');
-  const tables = ['users', 'feed_configs', 'feed_items'];
-  for (const table of tables) {
-    await pool.query(`TRUNCATE TABLE "${table}" CASCADE`);
-  }
-  await pool.query('COMMIT');
-}
-``` 

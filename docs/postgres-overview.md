@@ -280,4 +280,70 @@ Common error categories and handling strategies:
    - Regular backups
    - Monitor disk space
    - Update statistics
-   - Check for bloat 
+   - Check for bloat
+
+## Query Result Handling
+
+### Column Name Variations
+
+PostgreSQL may return column names in different formats depending on the query structure:
+
+```sql
+-- This might return a column named 'count'
+SELECT COUNT(*) FROM table_name;
+
+-- This might return a column named 'count(*)'
+SELECT COUNT(*) FROM table_name;
+```
+
+When processing query results, always use a robust approach that can handle different column name formats:
+
+```typescript
+// Robust approach to extract count value regardless of column name
+function extractCount(result: QueryResult): number {
+  if (!result || !result.rows || result.rows.length === 0) {
+    return 0;
+  }
+  
+  const firstRow = result.rows[0];
+  // Get the first property value, regardless of its name
+  const firstProperty = Object.values(firstRow)[0];
+  
+  return parseInt(firstProperty as string, 10) || 0;
+}
+```
+
+### Null/Undefined Handling
+
+Always check for null or undefined values when processing database query results:
+
+```typescript
+// Safe approach with null checks
+if (result && result.rows && result.rows.length > 0) {
+  // Process result
+} else {
+  // Handle empty result
+}
+```
+
+### Debug Logging
+
+Include debug logging when processing database results to help diagnose issues:
+
+```typescript
+logger.debug('Query result:', { result });
+```
+
+### Error Handling
+
+Implement proper error handling for database queries:
+
+```typescript
+try {
+  const result = await pool.query('SELECT COUNT(*) FROM table_name');
+  // Process result
+} catch (error) {
+  logger.error('Error executing query', { error, query: 'SELECT COUNT(*) FROM table_name' });
+  // Handle error appropriately
+}
+``` 
