@@ -1,10 +1,13 @@
 import { 
   GoogleAuthProvider, 
-  signInWithPopup, 
+  signInWithRedirect,
+  signInWithPopup,
+  getRedirectResult,
   signOut, 
   onAuthStateChanged,
   User as FirebaseUser,
-  getIdToken
+  getIdToken,
+  AuthError
 } from 'firebase/auth';
 import { auth } from './config';
 import { User } from '../types/user';
@@ -12,17 +15,64 @@ import { config } from '../config';
 
 // Create a Google Auth Provider
 const googleProvider = new GoogleAuthProvider();
+// Add scopes for better user profile access
+googleProvider.addScope('profile');
+googleProvider.addScope('email');
+// Set custom parameters for better compatibility
+googleProvider.setCustomParameters({
+  prompt: 'select_account'
+});
 
 /**
- * Sign in with Google using a popup
+ * Sign in with Google using a popup or redirect based on environment
  * @returns Promise that resolves with the user credentials
  */
 export const signInWithGoogle = async () => {
   try {
+    // Try popup first (works in most cases)
+    console.log('Attempting to sign in with Google using popup...');
     const result = await signInWithPopup(auth, googleProvider);
+    console.log('Sign in with popup successful');
     return result;
-  } catch (error) {
-    console.error('Error signing in with Google', error);
+  } catch (error: unknown) {
+    console.error('Error signing in with Google popup', error);
+    
+    // Check for CORS errors
+    if (error && typeof error === 'object' && 'code' in error) {
+      const authError = error as AuthError;
+      if (authError.code === 'auth/internal-error' || authError.code === 'auth/popup-closed-by-user') {
+        console.error('This may be a CORS issue. Trying redirect method instead...');
+        
+        // Fall back to redirect method
+        try {
+          await signInWithRedirect(auth, googleProvider);
+          // This won't be reached immediately as the page will redirect
+          return null;
+        } catch (redirectError: unknown) {
+          console.error('Error signing in with Google redirect', redirectError);
+          throw redirectError;
+        }
+      }
+    }
+    
+    throw error;
+  }
+};
+
+/**
+ * Check for redirect result after returning from OAuth redirect
+ * @returns Promise that resolves with the user credentials
+ */
+export const checkRedirectResult = async () => {
+  try {
+    const result = await getRedirectResult(auth);
+    if (result) {
+      console.log('Redirect sign-in successful');
+      return result;
+    }
+    return null;
+  } catch (error: unknown) {
+    console.error('Error getting redirect result', error);
     throw error;
   }
 };
@@ -34,7 +84,7 @@ export const signInWithGoogle = async () => {
 export const signOutUser = async () => {
   try {
     await signOut(auth);
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error signing out', error);
     throw error;
   }
@@ -52,7 +102,7 @@ export const getCurrentUserToken = async () => {
   
   try {
     return await getIdToken(user);
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error getting ID token', error);
     throw error;
   }
@@ -89,19 +139,24 @@ export const verifyAuthWithServer = async (): Promise<User | null> => {
       return null;
     }
     
+    console.log(`Verifying auth with server at ${config.serverUrl}/api/auth/verify`);
+    
     const response = await fetch(`${config.serverUrl}/api/auth/verify`, {
+      method: 'POST',
       headers: {
-        'Authorization': `Bearer ${token}`
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
       }
     });
     
     if (!response.ok) {
+      console.error('Server verification failed:', await response.text());
       return null;
     }
     
     const data = await response.json();
     return data.user;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error verifying authentication with server', error);
     return null;
   }

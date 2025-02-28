@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User } from '../../types/user';
 import { auth } from '../../firebase/config';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
-import { signInWithGoogle, signOutUser, verifyAuthWithServer } from '../../firebase/auth';
+import { signInWithGoogle, signOutUser, verifyAuthWithServer, checkRedirectResult } from '../../firebase/auth';
 
 interface AuthContextType {
   user: User | null;
@@ -26,6 +26,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Check for redirect result on initial load
+  useEffect(() => {
+    const checkForRedirect = async () => {
+      try {
+        const result = await checkRedirectResult();
+        if (result) {
+          console.log('Redirect authentication successful');
+          // The auth state listener will handle setting the user
+        }
+      } catch (err) {
+        console.error('Redirect authentication error:', err);
+        setError(err instanceof Error ? err.message : 'Authentication error');
+      }
+    };
+    
+    checkForRedirect();
+  }, []);
 
   // Handle Firebase auth state changes
   useEffect(() => {

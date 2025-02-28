@@ -1,13 +1,37 @@
 import express, { Express } from 'express';
 import session from 'express-session';
+import cors from 'cors';
 import { config } from './config';
 import { getServiceContainer } from './services/service-container';
 import { LoginHistoryService } from './services/login-history';
 import { registerRSSServices } from './services/rss';
 import { firebaseAuth, addRequestInfo } from './auth/middleware';
+import { logger } from './utils/logger';
 
 export async function createApp(): Promise<Express> {
   const app = express();
+
+  // Configure CORS - allow all origins in development
+  let corsOptions;
+  if (process.env.NODE_ENV === 'production') {
+    corsOptions = {
+      origin: config.clientUrl,
+      credentials: true,
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization']
+    };
+  } else {
+    // In development, allow all origins
+    corsOptions = {
+      origin: '*',
+      credentials: true,
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization']
+    };
+  }
+  
+  logger.info(`Configuring CORS with origin: ${corsOptions.origin}`);
+  app.use(cors(corsOptions));
 
   // Basic middleware
   app.use(express.json());
@@ -35,14 +59,34 @@ export async function createApp(): Promise<Express> {
   // Register RSS services before importing routes
   registerRSSServices(container);
   
-  // Import routes after services are registered
-  // This ensures that when the routes module is loaded, the services are already registered
-  const feedRoutes = (await import('./routes/feeds')).default;
-  const authRoutes = (await import('./routes/auth')).default;
+  // Import feed routes
+  try {
+    const feedRoutes = (await import('./routes/feeds')).default;
+    app.use('/api/feeds', feedRoutes);
+    logger.info('Feed routes registered successfully');
+  } catch (error) {
+    logger.error('Error importing feed routes:', error);
+  }
   
-  // Routes
-  app.use('/api/feeds', feedRoutes);
-  app.use('/api/auth', authRoutes);
+  // Define auth routes directly
+  const authRouter = express.Router();
+  
+  // Verify endpoint
+  authRouter.post('/verify', (req, res) => {
+    if (!req.user) {
+      return res.status(401).json({
+        error: {
+          code: 'INVALID_TOKEN',
+          message: 'Invalid or expired token'
+        }
+      });
+    }
+    
+    res.json({ user: req.user });
+  });
+  
+  app.use('/api/auth', authRouter);
+  logger.info('Auth routes registered successfully');
 
   return app;
 } 
