@@ -1,118 +1,95 @@
-import { Router } from 'express';
-import passport from 'passport';
-import type { Request, Response, NextFunction } from 'express';
-import type { User } from '../../types/user';
-import { requireAuth } from '../middleware/auth';
-import { UserService } from '../services/user-service';
-import { logger } from '../logger';
+import express from 'express';
+import type { Request, Response } from 'express';
+import { logger } from '../utils/logger';
+import { requireAuth } from '../auth/middleware';
 import { getServiceContainer } from '../services/service-container';
+import { LoginHistoryService } from '../services/login-history';
 
-const router = Router();
-
-// Get service instance
-const container = getServiceContainer();
-const userService = container.getService<UserService>('userService');
-
-// Test-only routes (only available in test environment)
-if (process.env.NODE_ENV === 'test') {
-  router.post('/session', async (req: Request, res: Response) => {
-    try {
-      if (!req.session) {
-        res.status(500).json({ error: 'Session not initialized' });
-        return;
-      }
-
-      // Validate request body
-      if (!req.body.passport || !req.body.passport.user) {
-        res.status(400).json({ 
-          error: {
-            code: 'INVALID_REQUEST',
-            message: 'Invalid session data'
-          }
-        });
-        return;
-      }
-
-      // Get user from database to ensure it exists
-      const user = await userService.findById(req.body.passport.user);
-      if (!user) {
-        res.status(404).json({ error: 'User not found' });
-        return;
-      }
-
-      // Initialize session with provided data
-      req.session.passport = req.body.passport;
-      
-      // Use login to properly set up the session
-      req.login(user, (err) => {
-        if (err) {
-          logger.error({ err }, 'Error logging in user');
-          res.status(500).json({ error: 'Failed to log in user' });
-          return;
-        }
-        res.json({ message: 'Session initialized' });
-      });
-    } catch (error) {
-      logger.error({ err: error }, 'Error initializing session');
-      res.status(500).json({ error: 'Failed to initialize session' });
-    }
-  });
-
-  router.get('/check', (req: Request, res: Response) => {
-    res.json({ 
-      authenticated: req.isAuthenticated(),
-      user: req.user
-    });
-  });
-
-  router.get('/verify', requireAuth, (req: Request, res: Response) => {
-    res.json({ 
-      authenticated: true,
-      user: req.user
-    });
-  });
-}
-
-// Google OAuth routes
-router.get('/google', passport.authenticate('google', {
-  scope: ['profile', 'email']
-}));
-
-router.get('/google/callback',
-  passport.authenticate('google', { 
-    failureRedirect: '/login',
-    failureMessage: true
-  }),
-  (req, res) => {
-    res.redirect('/');
-  }
-);
+// Create router
+const router = express.Router();
 
 // Get current user
-router.get('/me', requireAuth, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+router.get('/me', requireAuth, (req: Request, res: Response) => {
   try {
-    const user = await userService.findById(req.user!.id);
-    if (!user) {
-      res.status(404).json({ error: 'User not found' });
-      return;
-    }
-    res.json(user);
+    // User is already attached to the request by the firebaseAuth middleware
+    res.json({
+      user: req.user
+    });
   } catch (error) {
-    logger.error({ err: error }, 'Error getting current user');
-    next(error);
+    logger.error('Error in /api/auth/me route:', error);
+    res.status(500).json({
+      error: {
+        code: 'SERVER_ERROR',
+        message: 'Internal server error'
+      }
+    });
+  }
+});
+
+// Verify Firebase ID token
+router.post('/verify-token', (req: Request, res: Response) => {
+  try {
+    // The user is already attached to the request by the firebaseAuth middleware
+    // If the token is valid, the user will be available
+    if (!req.user) {
+      return res.status(401).json({
+        error: {
+          code: 'INVALID_TOKEN',
+          message: 'Invalid or expired token'
+        }
+      });
+    }
+
+    // Record successful login
+    const container = getServiceContainer();
+    const loginHistoryService = container.getService<LoginHistoryService>('loginHistoryService');
+    
+    const userAgent = req.get('user-agent') || 'unknown';
+    const ipAddress = req.ip || '0.0.0.0';
+    
+    // Use a Promise to handle the async operation
+    loginHistoryService.recordLogin(
+      req.user.id,
+      ipAddress,
+      userAgent,
+      true // success
+    ).catch(error => {
+      logger.error('Failed to record login:', error);
+    });
+
+    // Return the user
+    res.json({
+      user: req.user
+    });
+  } catch (error) {
+    logger.error('Error in /api/auth/verify-token route:', error);
+    res.status(500).json({
+      error: {
+        code: 'SERVER_ERROR',
+        message: 'Internal server error'
+      }
+    });
   }
 });
 
 // Logout
-router.post('/logout', (req: Request, res: Response, next: NextFunction): void => {
-  req.logout((err) => {
-    if (err) {
-      logger.error({ err }, 'Error during logout');
-      next(err);
-      return;
-    }
-    res.json({ message: 'Logged out successfully' });
-  });
+router.post('/logout', requireAuth, (req: Request, res: Response) => {
+  try {
+    // Firebase authentication is stateless, so we don't need to do anything server-side
+    // The client will handle clearing the token
+    res.json({
+      success: true,
+      message: 'Logged out successfully'
+    });
+  } catch (error) {
+    logger.error('Error in /api/auth/logout route:', error);
+    res.status(500).json({
+      error: {
+        code: 'SERVER_ERROR',
+        message: 'Internal server error'
+      }
+    });
+  }
 });
 
 export default router; 

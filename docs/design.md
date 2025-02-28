@@ -4,6 +4,7 @@
 20240120: Updated by Cam Marsollier with Claude 3.5 Sonnet to align with AI Feed Consolidator specification
 20240120: Updated by Cam Marsollier with Claude 3.5 Sonnet to add code quality tools configuration
 20240120: Updated by Cam Marsollier with Claude 3.5 Sonnet to add Google OAuth configuration
+20240205: Updated by Cam Marsollier with Claude 3.7 Sonnet to add Firebase Authentication implementation
 
 # AI Feed Consolidator Technical Design
 
@@ -446,6 +447,42 @@ The application uses Google OAuth 2.0 for authentication, providing a secure and
    - Email verification
    - Account linking
    - Role-based access control
+
+##***REMOVED*** Authentication
+- Client-side implementation
+  - Firebase SDK for web authentication
+  - Google authentication provider
+  - Token-based authentication
+  - Auth state management with React context
+- Server-side implementation
+  - Firebase Admin SDK for token verification
+  - Express middleware for authentication
+  - User management in PostgreSQL database
+  - Session management with JWT tokens
+
+#### Authentication Flow
+1. User initiates sign-in with Google through Firebase Authentication
+2. Firebase handles OAuth flow and returns Firebase user and ID token
+3. Client sends ID token to server for verification
+4. Server verifies token using Firebase Admin SDK
+5. Server finds or creates user in database based on Firebase user ID
+6. Server returns user data to client
+7. Client stores authentication state in React context
+8. Protected routes check authentication state before rendering
+
+###***REMOVED*** Configuration
+- Client-side configuration in `src/firebase/config.ts`
+- Authentication service in `src/firebase/auth.ts`
+- Server-side Firebase Admin in `src/server/auth/firebase-admin.ts`
+- Authentication middleware in `src/server/auth/middleware.ts`
+- Authentication routes in `src/server/routes/auth.ts`
+
+#### Security Considerations
+- ID tokens are short-lived (1 hour by default)
+- Tokens are verified on every request to protected routes
+- User data is stored securely in PostgreSQL database
+- Sensitive operations require re-authentication
+- Login history is tracked for security monitoring
 
 ## API Design
 

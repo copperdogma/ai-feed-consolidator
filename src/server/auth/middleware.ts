@@ -1,7 +1,9 @@
 import { Request, Response, NextFunction, RequestHandler } from 'express';
-import { logger } from '../logger';
+import { logger } from '../utils/logger';
 import { LoginHistoryService } from '../services/login-history';
 import { getServiceContainer } from '../services/service-container';
+import { verifyIdToken, findOrCreateFirebaseUser } from './firebase-admin';
+import { User } from '../../types/user';
 
 // Extend Express Request type
 declare module 'express' {
@@ -12,8 +14,68 @@ declare module 'express' {
       path: string;
       method: string;
     };
+    user?: User;
+    isAuthenticated(): boolean;
   }
 }
+
+/**
+ * Firebase authentication middleware
+ * Verifies the Firebase ID token in the Authorization header
+ * and attaches the user to the request object
+ */
+export const firebaseAuth = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    // Get the ID token from the Authorization header
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      req.user = undefined;
+      next();
+      return;
+    }
+
+    const idToken = authHeader.split('Bearer ')[1];
+    if (!idToken) {
+      req.user = undefined;
+      next();
+      return;
+    }
+
+    // Verify the ID token
+    const decodedToken = await verifyIdToken(idToken);
+    if (!decodedToken) {
+      req.user = undefined;
+      next();
+      return;
+    }
+
+    // Get the database from the service container
+    const container = getServiceContainer();
+    const db = container.getService('db');
+
+    // Find or create the user in our database
+    const user = await findOrCreateFirebaseUser(decodedToken, db);
+    if (!user) {
+      req.user = undefined;
+      next();
+      return;
+    }
+
+    // Attach the user to the request
+    req.user = user;
+    
+    // Add isAuthenticated method to request
+    req.isAuthenticated = function() {
+      return !!req.user;
+    };
+
+    next();
+  } catch (error) {
+    logger.error('Error in firebaseAuth middleware:', error);
+    req.user = undefined;
+    next();
+  }
+};
 
 export const requireAuth = (req: Request, res: Response, next: NextFunction): void => {
   try {
@@ -30,7 +92,7 @@ export const requireAuth = (req: Request, res: Response, next: NextFunction): vo
           userAgent,
           'Unauthenticated request to protected route',
           req.path,
-          req.session?.user?.id
+          req.user?.id
         ).catch(error => {
           logger.error('Failed to record login attempt:', error);
         });
