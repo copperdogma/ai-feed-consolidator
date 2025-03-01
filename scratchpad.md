@@ -2,9 +2,12 @@
 
 ## Current Phase
 - ✅ Migrated from Google OAuth to Firebase Authentication
-- Testing main features of the application
+- ✅ Testing main features of the application
 - ✅ Improved authentication flow with React Router
 - ✅ Fixed authentication flow and CORS issues
+- ✅ Cleaned Git repository of sensitive information
+- ✅ Fixed login history recording error
+- ✅ Added test coverage for login history functions
 
 ## Next Steps
 1. ✅ Update environment files with Firebase configuration
@@ -41,8 +44,21 @@
    - ✅ Test user sign-in with Google
    - ✅ Test token verification with the server
    - ✅ Test user sign-out
-10. Fix any remaining issues that arise during testing
-11. Update documentation with Firebase authentication details
+10. ✅ Clean up Git repository of sensitive information
+    - ✅ Remove .env file from Git tracking
+    - ✅ Purge sensitive credentials from Git history
+    - ✅ Replace real credentials with placeholders
+    - ✅ Ensure .gitignore properly excludes sensitive files
+11. ✅ Fix login history recording error
+    - ✅ Added missing created_at and updated_at fields to SQL query
+    - ✅ Properly registered LoginHistoryService in service container
+    - ✅ Enhanced error logging for better debugging
+12. ✅ Improve test coverage for login recording functionality
+    - ✅ Added tests for recordFailedAttempt method
+    - ✅ Created tests for both with and without user ID scenarios
+    - ✅ Verified all test cases pass successfully
+13. Fix any remaining issues that arise during testing
+14. Update documentation with Firebase authentication details
 
 ## Progress
 - Updated environment files (.env.example and .env.test) with Firebase configuration
@@ -83,12 +99,34 @@
   - Added X-Requested-With header for CORS compatibility
   - Improved token verification with better error handling
   - Successfully tested the authentication flow with popup method
+- Cleaned up Git repository to remove sensitive information:
+  - Used git-filter-repo to completely remove the .env file from Git history
+  - Replaced all sensitive credentials (API keys, client IDs, secrets) with placeholder values
+  - Ensured .env file is properly excluded in .gitignore
+  - Verified that GitHub no longer detects secrets in the repository
+  - Maintained original .env file for local development while removing it from Git tracking
+  - Created a fresh, clean history on the main branch with no sensitive data
+- Fixed login history recording error:
+  - Identified that LoginHistoryService was initialized but not registered with container
+  - Added proper registration in app.ts
+  - Fixed missing created_at and updated_at fields in recordFailedAttempt SQL query
+  - Added enhanced error logging for better debugging
+  - Verified fix by observing "Login recorded successfully" messages in logs
+- Improved test coverage for login history functionality:
+  - Added two new test cases for the recordFailedAttempt method
+  - Created test for recording failed login attempt without a user ID
+  - Created test for recording failed login attempt with a user ID
+  - Verified all assertion checks pass
+  - Confirmed proper database recording in both scenarios
+  - Ran tests successfully with all 4 test cases passing
 
 ## Unfinished Tasks
 - Examine tests for redundancy and improve test performance
 - Address React Query warnings
-- Fix login history recording error (currently showing "Failed to record login" in logs)
+- ✅ Fix login history recording error (currently showing "Failed to record login" in logs)
+- ✅ Add test coverage for LoginHistoryService.recordFailedAttempt
 - Update documentation with Firebase authentication details
+- Consider rotating credentials that were previously exposed in Git history
 
 ## Testing Plan
 - ✅ Test user authentication flow with Firebase:
@@ -112,5 +150,11 @@
   - Development: ai-feed-dev
   - Test: ai-feed-test
 - Firebase authentication implementation is complete and working successfully
-- There's a non-critical error in login history recording that should be fixed
+- ✅ Fixed login history recording error that was causing "Failed to record login" messages
+- ✅ Added comprehensive test coverage for LoginHistoryService, including recordFailedAttempt method
 - The popup authentication method is more reliable than redirect, with fallback to redirect if popup is blocked
+- Successfully cleaned the Git repository of sensitive information using git-filter-repo
+- Learned that .env files committed before .gitignore was set up will continue to be tracked
+- Used git-filter-repo instead of BFG Repo-Cleaner for more complete cleanup
+- Created a fresh history approach with old branches preserved as backups
+- Techniques used: clone with --no-local, pattern-based text replacement, and path filtering

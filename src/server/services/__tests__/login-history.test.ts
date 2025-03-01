@@ -242,4 +242,100 @@ describe.sequential('LoginHistoryService', () => {
       throw error;
     }
   });
+
+  // Third test - Record failed login attempt without a user ID
+  it('should record failed login attempt without a user ID', async () => {
+    try {
+      logger.info('[TEST-3] Starting test: record failed login without user ID');
+      
+      // Verify service exists
+      expect(loginHistoryService).toBeDefined();
+
+      // Test IP and request details
+      const testIp = '192.168.1.1';
+      const testUserAgent = 'test-browser-agent';
+      const testFailureReason = 'Invalid email address';
+      const testRequestPath = '/api/auth/login';
+      
+      // Record a failed login without a user ID
+      await loginHistoryService.recordFailedAttempt(
+        testIp,
+        testUserAgent,
+        testFailureReason,
+        testRequestPath
+      );
+      
+      logger.info('[TEST-3] Failed login without user ID recorded successfully');
+      
+      // Get the database pool from the container
+      const dbPool = container.getService<any>('databasePool');
+      
+      // Verify it was recorded
+      const result = await dbPool.oneOrNone(
+        'SELECT * FROM login_history WHERE ip_address = $1 AND user_id IS NULL AND success = false',
+        [testIp]
+      );
+      
+      expect(result).toBeDefined();
+      expect(result.ip_address).toBe(testIp);
+      expect(result.user_agent).toBe(testUserAgent);
+      expect(result.failure_reason).toBe(testFailureReason);
+      expect(result.request_path).toBe(testRequestPath);
+      expect(result.success).toBe(false);
+      
+      logger.info('[TEST-3] Test completed successfully');
+    } catch (error) {
+      logger.error('[TEST-3] Error in recordFailedAttempt test:', error);
+      throw error;
+    }
+  });
+
+  // Fourth test - Record failed login attempt with a user ID
+  it('should record failed login attempt with a user ID', async () => {
+    try {
+      logger.info('[TEST-4] Starting test: record failed login with user ID');
+      
+      // Verify service exists
+      expect(loginHistoryService).toBeDefined();
+
+      // Test details
+      const testIp = '192.168.1.2';
+      const testUserAgent = 'test-mobile-agent';
+      const testFailureReason = 'Account locked';
+      const testRequestPath = '/api/auth/verify';
+      
+      // Record a failed login with a user ID
+      await loginHistoryService.recordFailedAttempt(
+        testIp,
+        testUserAgent,
+        testFailureReason,
+        testRequestPath,
+        testUserId
+      );
+      
+      logger.info('[TEST-4] Failed login with user ID recorded successfully');
+      
+      // Get the database pool from the container
+      const dbPool = container.getService<any>('databasePool');
+      
+      // Verify it was recorded
+      const result = await dbPool.oneOrNone(
+        'SELECT * FROM login_history WHERE ip_address = $1 AND user_id = $2 AND success = false',
+        [testIp, testUserId]
+      );
+      
+      expect(result).toBeDefined();
+      expect(result.ip_address).toBe(testIp);
+      expect(result.user_agent).toBe(testUserAgent);
+      expect(result.failure_reason).toBe(testFailureReason);
+      expect(result.request_path).toBe(testRequestPath);
+      expect(result.user_id).toBe(testUserId);
+      expect(result.success).toBe(false);
+      
+      logger.info('[TEST-4] Test completed successfully');
+    } catch (error) {
+      logger.error('[TEST-4] Error in recordFailedAttempt with user ID test:', error);
+      throw error;
+    }
+  });
 }); 
