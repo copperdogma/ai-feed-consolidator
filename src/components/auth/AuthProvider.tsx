@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User } from '../../types/user';
 import { auth } from '../../firebase/config';
-import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
+import { onAuthStateChanged } from 'firebase/auth';
 import { signInWithGoogle, signOutUser, verifyAuthWithServer, checkRedirectResult } from '../../firebase/auth';
 
 interface AuthContextType {
@@ -31,10 +31,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const checkForRedirect = async () => {
       try {
+        console.log('Checking for redirect result...');
         const result = await checkRedirectResult();
         if (result) {
-          console.log('Redirect authentication successful');
-          // The auth state listener will handle setting the user
+          console.log('Redirect authentication successful, user:', result.user.email);
+          // We'll let the auth state listener handle setting the user
+        } else {
+          console.log('No redirect result found');
         }
       } catch (err) {
         console.error('Redirect authentication error:', err);
@@ -47,18 +50,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Handle Firebase auth state changes
   useEffect(() => {
+    console.log('Setting up auth state listener');
+    
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      console.log('Auth state changed, user:', firebaseUser?.email || 'none');
+      
       try {
         if (firebaseUser) {
           // User is signed in
-          console.log('Firebase user authenticated:', firebaseUser.email);
+          console.log('Firebase user authenticated, verifying with server...');
           
           // Verify with our server and get the user data
           const serverUser = await verifyAuthWithServer();
-          setUser(serverUser);
+          
+          if (serverUser) {
+            console.log('Server verification successful, user:', serverUser.email);
+            setUser(serverUser);
+            setError(null); // Clear any previous errors
+          } else {
+            console.error('Server verification failed, no user returned');
+            setError('Server verification failed');
+            setUser(null);
+          }
         } else {
           // User is signed out
+          console.log('User is signed out');
           setUser(null);
+          setError(null); // Don't show error for unauthenticated users
         }
       } catch (err) {
         console.error('Auth state change error:', err);
@@ -70,14 +88,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     // Cleanup subscription
-    return () => unsubscribe();
+    return () => {
+      console.log('Cleaning up auth state listener');
+      unsubscribe();
+    };
   }, []);
 
   const handleSignIn = async () => {
     try {
       setLoading(true);
       setError(null);
+      console.log('Starting sign in process...');
       await signInWithGoogle();
+      console.log('Sign in function completed');
       // The auth state listener will handle setting the user
     } catch (err) {
       console.error('Sign in error:', err);
@@ -89,8 +112,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const handleSignOut = async () => {
     try {
       setLoading(true);
+      console.log('Starting sign out process...');
       await signOutUser();
       setUser(null);
+      console.log('Sign out completed');
     } catch (err) {
       console.error('Sign out error:', err);
       setError(err instanceof Error ? err.message : 'Sign out failed');
@@ -98,6 +123,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setLoading(false);
     }
   };
+
+  // Log state changes for debugging
+  useEffect(() => {
+    console.log('Auth state updated:', { 
+      isAuthenticated: !!user, 
+      loading, 
+      hasError: !!error 
+    });
+  }, [user, loading, error]);
 
   const value = {
     user,

@@ -13,6 +13,7 @@ import {
 import { styled } from '@mui/material/styles';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider, CssBaseline } from '@mui/material';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { theme } from './theme';
 import { FeedManagement } from './components/feed-management/FeedManagement';
 import { FeedDisplay } from './components/FeedDisplay';
@@ -38,10 +39,10 @@ const ContentBox = styled(Box)({
   alignItems: 'center'
 });
 
-// Main app content that requires authentication
-const AuthenticatedApp: React.FC = () => {
-  const { user, loading, error, signOut } = useAuth();
-
+// Protected route component that redirects to login if not authenticated
+const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user, loading } = useAuth();
+  
   if (loading) {
     return (
       <PageContainer>
@@ -51,6 +52,17 @@ const AuthenticatedApp: React.FC = () => {
       </PageContainer>
     );
   }
+  
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+  
+  return <>{children}</>;
+};
+
+// Main app content that requires authentication
+const Dashboard: React.FC = () => {
+  const { user, loading, error, signOut } = useAuth();
 
   const errorMessage = error && (
     <Box sx={{ p: 2, bgcolor: 'error.main', color: 'error.contrastText' }}>
@@ -59,10 +71,6 @@ const AuthenticatedApp: React.FC = () => {
       </Typography>
     </Box>
   );
-
-  if (!user) {
-    return <Login />;
-  }
 
   return (
     <Box sx={{ flexGrow: 1 }}>
@@ -73,7 +81,7 @@ const AuthenticatedApp: React.FC = () => {
           </Typography>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <Typography variant="h6" data-testid="welcome-message">
-              Welcome, {user.display_name}!
+              Welcome, {user?.display_name || 'User'}!
             </Typography>
             <Button
               color="inherit"
@@ -100,14 +108,22 @@ const AuthenticatedApp: React.FC = () => {
   );
 };
 
-// Root App component with providers
+// Root App component with providers and routes
 function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <AuthenticatedApp />
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/" element={
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            } />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
         </AuthProvider>
         <ReactQueryDevtools initialIsOpen={false} />
       </QueryClientProvider>
