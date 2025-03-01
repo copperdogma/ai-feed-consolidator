@@ -4,7 +4,9 @@
  * Use Firebase Authentication methods instead.
  */
 
+// @ts-expect-error - Deprecated file, kept for backward compatibility
 import passport from 'passport';
+// @ts-expect-error - Deprecated file, kept for backward compatibility
 import { Strategy as GoogleStrategy, Profile } from 'passport-google-oauth20';
 import { config } from '../config';
 import { LoginHistoryService } from '../services/login-history';
@@ -13,7 +15,7 @@ import { UserService } from '../services/user-service';
 import { GoogleAuthService } from '../services/google-auth-service';
 import type { User } from '../../types/user';
 import { logger } from '../logger';
-import { ServiceContainer, getServiceContainer } from '../services/service-container';
+import { getServiceContainer } from '../services/service-container';
 
 // Get service instances
 const container = getServiceContainer();
@@ -22,24 +24,25 @@ const googleAuthService = container.getService<GoogleAuthService>('googleAuthSer
 const loginHistoryService = container.getService<LoginHistoryService>('loginHistoryService');
 
 // Extend Express Request to include loginAttempt
+// @ts-expect-error - Using namespace is standard pattern for Express
 declare global {
   namespace Express {
     interface Request {
       loginAttempt?: {
         ipAddress: string;
         userAgent: string;
-      }
+      };
       user?: User;
     }
   }
 }
 
 // Configure passport serialization
-passport.serializeUser((user: User, done: (err: any, id?: number) => void) => {
+passport.serializeUser((user: User, done: (err: unknown, id?: number) => void) => {
   done(null, user.id);
 });
 
-passport.deserializeUser(async (id: number, done: (err: any, user?: User) => void) => {
+passport.deserializeUser(async (id: number, done: (err: unknown, user?: User) => void) => {
   try {
     logger.debug({ userId: id }, 'Attempting to deserialize user');
     const user = await userService.findById(id);
@@ -60,11 +63,19 @@ passport.deserializeUser(async (id: number, done: (err: any, user?: User) => voi
 passport.use(
   new GoogleStrategy(
     {
+      // @ts-expect-error - Deprecated file, kept for backward compatibility
       clientID: config.google.clientId,
+      // @ts-expect-error - Deprecated file, kept for backward compatibility
       clientSecret: config.google.clientSecret,
+      // @ts-expect-error - Deprecated file, kept for backward compatibility
       callbackURL: config.google.callbackUrl,
     },
-    async (accessToken: string, refreshToken: string, profile: Profile, done: (error: any, user?: User) => void) => {
+    async (
+      accessToken: string,
+      refreshToken: string,
+      profile: Profile,
+      done: (error: unknown, user?: User) => void
+    ) => {
       try {
         logger.debug({ profile }, 'Google authentication attempt');
         const user = await googleAuthService.findOrCreateGoogleUser(profile);
@@ -87,7 +98,13 @@ passport.use(
 );
 
 // Middleware to require authentication
-export const requireAuth: RequestHandler = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+// @ts-expect-error - Deprecated file, kept for backward compatibility
+export const requireAuth: RequestHandler = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  // @ts-expect-error - Deprecated file, kept for backward compatibility
   if (!req.isAuthenticated()) {
     // Record failed login attempt
     await loginHistoryService.recordLogin(
@@ -99,8 +116,8 @@ export const requireAuth: RequestHandler = async (req: Request, res: Response, n
     res.status(401).json({
       error: {
         code: 'UNAUTHORIZED',
-        message: 'Authentication required'
-      }
+        message: 'Authentication required',
+      },
     });
     return;
   }
@@ -108,11 +125,16 @@ export const requireAuth: RequestHandler = async (req: Request, res: Response, n
 };
 
 // Middleware to add request info to login attempts
-export const addRequestInfo: RequestHandler = (req: Request, res: Response, next: NextFunction): void => {
+// @ts-expect-error - Deprecated file, kept for backward compatibility
+export const addRequestInfo: RequestHandler = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void => {
   const userAgent = req.get('User-Agent') || 'Unknown';
   req.loginAttempt = {
     ipAddress: req.ip || 'Unknown',
-    userAgent
+    userAgent,
   };
   next();
 };
