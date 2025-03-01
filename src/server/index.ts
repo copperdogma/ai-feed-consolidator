@@ -10,6 +10,7 @@ import { ServiceContainer } from './services/service-container';
 const container = ServiceContainer.getInstance();
 container.register('pool', db);
 container.register('databasePool', db);
+container.register('db', db);
 await container.initialize();
 
 // Initialize database 

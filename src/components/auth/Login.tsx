@@ -11,13 +11,14 @@ const Login: React.FC = () => {
   // Redirect authenticated users to the main page
   useEffect(() => {
     if (user) {
-      console.log('User already authenticated, redirecting to main page');
+      console.log('User authenticated, redirecting to main page');
       navigate('/');
     }
   }, [user, navigate]);
 
   const handleGoogleLogin = async () => {
     try {
+      console.log('Initiating Google login...');
       await signIn();
     } catch (err) {
       console.error('Login error:', err);
@@ -60,6 +61,9 @@ const Login: React.FC = () => {
           <CircularProgress />
           <Typography variant="body1" sx={{ mt: 2 }}>
             Redirecting to Google for authentication...
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            You'll be redirected to Google's login page. After signing in, you'll be returned to this application.
           </Typography>
         </Box>
       </Container>

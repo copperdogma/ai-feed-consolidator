@@ -11,24 +11,13 @@ import { logger } from './utils/logger';
 export async function createApp(): Promise<Express> {
   const app = express();
 
-  // Configure CORS - allow all origins in development
-  let corsOptions;
-  if (process.env.NODE_ENV === 'production') {
-    corsOptions = {
-      origin: config.clientUrl,
-      credentials: true,
-      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
-    };
-  } else {
-    // In development, allow specific origin with credentials
-    corsOptions = {
-      origin: config.clientUrl, // Use specific client URL instead of wildcard
-      credentials: true,
-      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
-    };
-  }
+  // Configure CORS with specific origin
+  const corsOptions = {
+    origin: config.clientUrl,
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+  };
   
   logger.info(`Configuring CORS with origin: ${corsOptions.origin}`);
   app.use(cors(corsOptions));
@@ -89,7 +78,7 @@ export async function createApp(): Promise<Express> {
   logger.info('Auth routes registered successfully');
 
   // Add a health check endpoint
-  app.get('/api/health', (req: express.Request, res: express.Response) => {
+  app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
   logger.info('Health check endpoint registered');

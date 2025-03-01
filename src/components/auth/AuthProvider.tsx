@@ -29,12 +29,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isRedirecting, setIsRedirecting] = useState(false);
+  const [redirectChecked, setRedirectChecked] = useState(false);
 
   // Check for redirect result on initial load
   useEffect(() => {
     const checkForRedirect = async () => {
       try {
         console.log('Checking for redirect result...');
+        setLoading(true);
         const result = await checkRedirectResult();
         if (result) {
           console.log('Redirect authentication successful, user:', result.user.email);
@@ -46,8 +48,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.error('Redirect authentication error:', err);
         setError(err instanceof Error ? err.message : 'Authentication error');
       } finally {
-        // Ensure loading state is updated even if there's no redirect result
+        // Ensure loading and redirecting states are updated
         setLoading(false);
+        setIsRedirecting(false);
+        setRedirectChecked(true);
       }
     };
     
@@ -65,6 +69,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (firebaseUser) {
           // User is signed in
           console.log('Firebase user authenticated, verifying with server...');
+          setLoading(true);
           
           // Verify with our server and get the user data
           const serverUser = await verifyAuthWithServer();
@@ -90,6 +95,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(null);
       } finally {
         setLoading(false);
+        // Also ensure redirecting state is reset
+        setIsRedirecting(false);
       }
     });
 
@@ -137,9 +144,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     console.log('Auth state updated:', { 
       isAuthenticated: !!user, 
       loading, 
-      hasError: !!error 
+      hasError: !!error,
+      isRedirecting,
+      redirectChecked
     });
-  }, [user, loading, error]);
+  }, [user, loading, error, isRedirecting, redirectChecked]);
 
   const value = {
     user,
