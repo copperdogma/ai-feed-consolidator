@@ -47,7 +47,7 @@ export const firebaseAuth = async (req: Request, res: Response, next: NextFuncti
       return;
     }
 
-    logger.debug('Token found, verifying with Firebase Admin...');
+    logger.debug(`Token found (length: ${idToken.length}), verifying with Firebase Admin...`);
     
     // Verify the ID token
     const decodedToken = await verifyIdToken(idToken);
@@ -59,12 +59,14 @@ export const firebaseAuth = async (req: Request, res: Response, next: NextFuncti
     }
 
     logger.debug(`Token verified for user: ${decodedToken.email || decodedToken.uid}`);
+    logger.debug(`Token details: uid=${decodedToken.uid}, email=${decodedToken.email || 'none'}, email_verified=${decodedToken.email_verified}`);
     
     // Get the database from the service container or use direct db reference
     let dbInstance;
     try {
       const container = getServiceContainer();
       dbInstance = container.getService('db');
+      logger.debug('Successfully retrieved db service from container');
     } catch (error) {
       logger.warn('Could not get db service from container, using direct db reference');
       dbInstance = db;
@@ -78,7 +80,7 @@ export const firebaseAuth = async (req: Request, res: Response, next: NextFuncti
     }
 
     // Find or create the user in our database
-    logger.debug('Finding or creating user in database...');
+    logger.debug(`Finding or creating user in database for uid: ${decodedToken.uid}`);
     const user = await findOrCreateFirebaseUser(decodedToken, dbInstance);
     if (!user) {
       logger.error('Failed to find or create user in database');

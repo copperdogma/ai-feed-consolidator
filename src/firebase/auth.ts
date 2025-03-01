@@ -47,15 +47,34 @@ export const signInWithGoogle = async () => {
 export const checkRedirectResult = async () => {
   try {
     console.log('Checking for redirect result...');
+    console.log('Current auth state:', auth.currentUser ? `Logged in as ${auth.currentUser.email}` : 'Not logged in');
+    
     const result = await getRedirectResult(auth);
+    
     if (result) {
       console.log('Redirect sign-in successful, user:', result.user.email);
+      console.log('User ID token available:', !!(await result.user.getIdToken()));
       return result;
     }
+    
     console.log('No redirect result found');
+    
+    // Even if no redirect result is found, check if we're already logged in
+    if (auth.currentUser) {
+      console.log('No redirect result, but user is already logged in as:', auth.currentUser.email);
+      // Return a mock result to trigger the auth flow
+      return {
+        user: auth.currentUser
+      };
+    }
+    
     return null;
   } catch (error: unknown) {
     console.error('Error getting redirect result', error);
+    if (error instanceof Error) {
+      console.error('Error details:', error.message);
+      console.error('Error stack:', error.stack);
+    }
     throw error;
   }
 };
@@ -126,11 +145,15 @@ export const verifyAuthWithServer = async (): Promise<User | null> => {
     const verifyUrl = `${config.serverUrl}/api/auth/verify`;
     console.log(`Verifying auth with server at ${verifyUrl}`);
     
+    // Log the token length for debugging (don't log the actual token)
+    console.log(`Token available (length: ${token.length})`);
+    
     const response = await fetch(verifyUrl, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest'
       },
       credentials: 'include' // Include cookies if any
     });
@@ -140,11 +163,15 @@ export const verifyAuthWithServer = async (): Promise<User | null> => {
     if (!response.ok) {
       const errorText = await response.text();
       console.error('Server verification failed:', response.status, errorText);
+      
+      // Log more details about the error
+      console.error('Response headers:', JSON.stringify(Array.from(response.headers.entries())));
+      
       return null;
     }
     
     const data = await response.json();
-    console.log('Server verification successful, received user data');
+    console.log('Server verification successful, received user data:', data.user ? `ID: ${data.user.id}, Email: ${data.user.email}` : 'No user data');
     return data.user;
   } catch (error: unknown) {
     console.error('Error verifying authentication with server', error);
@@ -154,6 +181,12 @@ export const verifyAuthWithServer = async (): Promise<User | null> => {
         console.error('Stack trace:', error.stack);
       }
     }
+    
+    // Check if it's a network error
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      console.error('Network error - check if the server is running and accessible');
+    }
+    
     return null;
   }
 };

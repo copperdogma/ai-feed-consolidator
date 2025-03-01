@@ -37,12 +37,49 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         console.log('Checking for redirect result...');
         setLoading(true);
+        
+        // Check if we're already logged in
+        if (auth.currentUser) {
+          console.log('User already logged in as:', auth.currentUser.email);
+        }
+        
         const result = await checkRedirectResult();
         if (result) {
           console.log('Redirect authentication successful, user:', result.user.email);
-          // We'll let the auth state listener handle setting the user
+          
+          // Immediately verify with server instead of waiting for auth state change
+          try {
+            console.log('Verifying with server after redirect...');
+            const serverUser = await verifyAuthWithServer();
+            if (serverUser) {
+              console.log('Server verification successful after redirect, user:', serverUser.email);
+              setUser(serverUser);
+              setError(null);
+            } else {
+              console.error('Server verification failed after redirect');
+              setError('Server verification failed');
+            }
+          } catch (verifyErr) {
+            console.error('Error verifying with server after redirect:', verifyErr);
+            setError(verifyErr instanceof Error ? verifyErr.message : 'Server verification error');
+          }
         } else {
           console.log('No redirect result found');
+          
+          // Even if no redirect result, check if we're already logged in
+          if (auth.currentUser) {
+            console.log('No redirect result, but already logged in as:', auth.currentUser.email);
+            try {
+              const serverUser = await verifyAuthWithServer();
+              if (serverUser) {
+                console.log('Server verification successful for existing user:', serverUser.email);
+                setUser(serverUser);
+                setError(null);
+              }
+            } catch (verifyErr) {
+              console.error('Error verifying existing user with server:', verifyErr);
+            }
+          }
         }
       } catch (err) {
         console.error('Redirect authentication error:', err);

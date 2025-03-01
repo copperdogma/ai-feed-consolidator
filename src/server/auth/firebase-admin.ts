@@ -3,6 +3,7 @@ import { getAuth } from 'firebase-admin/auth';
 import { logger } from '../utils/logger';
 import { User } from '../../types/user';
 import * as fs from 'fs';
+import { DecodedIdToken } from 'firebase-admin/auth';
 
 // Initialize Firebase Admin SDK
 try {
@@ -80,17 +81,42 @@ try {
 }
 
 /**
- * Verify a Firebase ID token and return the decoded token
- * @param idToken Firebase ID token to verify
- * @returns Decoded token or null if verification fails
+ * Verify a Firebase ID token
+ * @param idToken The ID token to verify
+ * @returns The decoded token if valid, null otherwise
  */
-export const verifyIdToken = async (idToken: string) => {
+export const verifyIdToken = async (idToken: string): Promise<DecodedIdToken | null> => {
   try {
+    logger.debug(`Verifying ID token (length: ${idToken.length})`);
+    
+    // Get the Firebase Auth instance
     const auth = getAuth();
+    
+    // Verify the ID token
     const decodedToken = await auth.verifyIdToken(idToken);
+    
+    logger.debug(`Token verified successfully for user: ${decodedToken.email || decodedToken.uid}`);
+    logger.debug(`Token payload: uid=${decodedToken.uid}, email=${decodedToken.email || 'none'}, email_verified=${decodedToken.email_verified}`);
+    
     return decodedToken;
   } catch (error) {
-    logger.error('Error verifying Firebase ID token:', error);
+    logger.error('Error verifying ID token:', error);
+    if (error instanceof Error) {
+      logger.error(`Error details: ${error.message}`);
+      
+      // Log specific Firebase Auth error codes
+      if (error.message.includes('expired')) {
+        logger.error('Token has expired. User needs to reauthenticate.');
+      } else if (error.message.includes('invalid')) {
+        logger.error('Token is invalid. Possible tampering or incorrect format.');
+      } else if (error.message.includes('revoked')) {
+        logger.error('Token has been revoked. User needs to reauthenticate.');
+      }
+      
+      if (error.stack) {
+        logger.error(`Stack trace: ${error.stack}`);
+      }
+    }
     return null;
   }
 };
