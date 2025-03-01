@@ -60,18 +60,12 @@ export async function createApp(): Promise<Express> {
   // Define auth routes directly
   const authRouter = express.Router();
   
+  // Import the verifyAuth function
+  const { verifyAuth } = await import('./auth/verify');
+  
   // Verify endpoint
-  authRouter.post('/verify', (req, res) => {
-    if (!req.user) {
-      return res.status(401).json({
-        error: {
-          code: 'INVALID_TOKEN',
-          message: 'Invalid or expired token'
-        }
-      });
-    }
-    
-    res.json({ user: req.user });
+  authRouter.post('/verify', async (req, res) => {
+    await verifyAuth(req, res);
   });
   
   app.use('/api/auth', authRouter);
@@ -80,6 +74,7 @@ export async function createApp(): Promise<Express> {
   // Add a health check endpoint
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
+    logger.info('Health check endpoint called');
   });
   logger.info('Health check endpoint registered');
 

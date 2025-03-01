@@ -150,9 +150,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setError(null);
       setIsRedirecting(true);
       console.log('Starting sign in process...');
-      await signInWithGoogle();
-      console.log('Sign in function completed');
-      // The auth state listener will handle setting the user
+      
+      const result = await signInWithGoogle();
+      console.log('Sign in function completed, result:', result ? 'success' : 'redirect initiated');
+      
+      // If we got a result (from popup), verify with server immediately
+      if (result) {
+        console.log('Popup authentication successful, verifying with server...');
+        try {
+          const serverUser = await verifyAuthWithServer();
+          if (serverUser) {
+            console.log('Server verification successful after popup auth, user:', serverUser.email);
+            setUser(serverUser);
+            setError(null);
+          } else {
+            console.error('Server verification failed after popup auth');
+            setError('Server verification failed');
+          }
+        } catch (verifyErr) {
+          console.error('Error verifying with server after popup auth:', verifyErr);
+          setError(verifyErr instanceof Error ? verifyErr.message : 'Server verification error');
+        } finally {
+          setLoading(false);
+          setIsRedirecting(false);
+        }
+      }
+      // If no result, we're using redirect and the page will reload
+      // The loading state will be handled by the redirect check on reload
     } catch (err) {
       console.error('Sign in error:', err);
       setError(err instanceof Error ? err.message : 'Sign in failed');

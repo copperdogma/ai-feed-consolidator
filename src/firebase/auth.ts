@@ -29,13 +29,29 @@ googleProvider.setCustomParameters({
  */
 export const signInWithGoogle = async () => {
   try {
-    // Always use redirect method for more reliable cross-browser compatibility
-    console.log('Signing in with Google using redirect method...');
-    await signInWithRedirect(auth, googleProvider);
-    // This won't be reached immediately as the page will redirect
-    return null;
+    // Use popup method instead of redirect for more reliable authentication
+    console.log('Signing in with Google using popup method...');
+    const result = await signInWithPopup(auth, googleProvider);
+    console.log('Google sign-in successful with popup, user:', result.user.email);
+    
+    // Return the result so we can use it immediately
+    return result;
   } catch (error: unknown) {
-    console.error('Error signing in with Google redirect', error);
+    console.error('Error signing in with Google popup', error);
+    if (error instanceof Error) {
+      // Check if it's a popup blocked error
+      if (error.message.includes('popup') && error.message.includes('blocked')) {
+        console.log('Popup was blocked, falling back to redirect method...');
+        try {
+          await signInWithRedirect(auth, googleProvider);
+          console.log('Redirect initiated, page will reload after authentication');
+          return null;
+        } catch (redirectError) {
+          console.error('Error with redirect fallback:', redirectError);
+          throw redirectError;
+        }
+      }
+    }
     throw error;
   }
 };
