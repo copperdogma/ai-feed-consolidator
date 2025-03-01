@@ -17,11 +17,6 @@ export interface Config {
     model: string;
     maxTokens: number;
   };
-  google: {
-    clientId: string;
-    clientSecret: string;
-    callbackUrl: string;
-  };
 }
 
 export const config: Config = {
@@ -37,11 +32,6 @@ export const config: Config = {
     apiKey: process.env.OPENAI_API_KEY || '',
     model: process.env.OPENAI_MODEL || 'gpt-3.5-turbo',
     maxTokens: parseInt(process.env.OPENAI_MAX_TOKENS || '500', 10)
-  },
-  google: {
-    clientId: process.env.GOOGLE_CLIENT_ID || '',
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
-    callbackUrl: process.env.GOOGLE_CALLBACK_URL || 'http://localhost:3003/api/auth/google/callback'
   }
 };
 

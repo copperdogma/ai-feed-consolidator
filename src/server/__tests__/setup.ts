@@ -27,8 +27,7 @@ config({ path: '.env.test' });
 
 // Set test-specific environment variables
 process.env.NODE_ENV = process.env.NODE_ENV || 'test';
-process.env.GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || 'test-client-id';
-process.env.GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || 'test-client-secret';
+// Google OAuth is no longer used - using Firebase Authentication instead
 process.env.OPENAI_API_KEY = process.env.OPENAI_API_KEY || 'test-api-key';
 
 // Get current file's directory with ES modules

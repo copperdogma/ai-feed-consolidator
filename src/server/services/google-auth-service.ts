@@ -1,3 +1,8 @@
+/**
+ * @deprecated This service is deprecated as the application has migrated to Firebase Authentication.
+ * It is kept for reference and backward compatibility, but should not be used for new code.
+ * Use Firebase Authentication methods instead.
+ */
 import { Pool } from 'pg';
 import { IDatabase } from 'pg-promise';
 import type { Profile as GoogleProfile } from 'passport-google-oauth20';
@@ -7,6 +12,9 @@ import { logger } from '../logger';
 import { IServiceContainer } from './service-container.interface';
 import { TransactionManager } from './transaction-manager';
 
+/**
+ * @deprecated Use Firebase Authentication instead.
+ */
 export class GoogleAuthService {
   private pool: IDatabase<any>;
   private transactionManager: TransactionManager;
