@@ -50,5 +50,8 @@ credentials.json
 *-credentials.json
 *.pem
 *.key
-***REMOVED*** service account
-your-project-id-firebase-adminsdk-fbsvc-7d2fc50af2.json
+***REMOVED*** service account - using patterns instead of specific filenames
+*-firebase-adminsdk-*.json
+firebase-*.json
+firebase-credentials.json
+service-account*.json
