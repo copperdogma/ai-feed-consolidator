@@ -36,6 +36,7 @@ A personal platform for managing and consuming content from various services by 
 - Docker and Docker Compose
 - Google Cloud Platform account (for OAuth)
 - OpenAI API key (for summaries)
+- Firebase project (for authentication)
 
 ### Installation
 1. Clone the repository:
@@ -55,6 +56,43 @@ cp .env.example .env
 ```bash
 npm install
 ```
+
+##***REMOVED*** Setup
+
+#### Client-Side Setup
+1. Create a Firebase project at [https://console.firebase.google.com/](https://console.firebase.google.com/)
+2. Add a web app to your project
+3. Enable Google Authentication in the Firebase Console (Authentication > Sign-in method)
+4. Copy your Firebase config values to your `.env` file:
+   ```
+   VITE_FIREBASE_API_KEY="your-firebase-api-key"
+   VITE_FIREBASE_AUTH_DOMAIN="your-project-id.firebaseapp.com"
+   VITE_FIREBASE_PROJECT_ID="your-project-id"
+   VITE_FIREBASE_STORAGE_BUCKET="your-project-id.appspot.com"
+   VITE_FIREBASE_MESSAGING_SENDER_ID="your-messaging-sender-id"
+   VITE_FIREBASE_APP_ID="your-app-id"
+   ```
+
+#### Server-Side Setup (Firebase Admin SDK)
+1. Go to your Firebase project settings > Service accounts
+2. Click "Generate new private key" to download a service account JSON file
+3. Store this file securely (never commit it to version control)
+4. Configure the Admin SDK in your `.env` file using one of these methods:
+
+   **Option 1: Using GOOGLE_APPLICATION_CREDENTIALS (Recommended)**
+   ```
+   GOOGLE_APPLICATION_CREDENTIALS="/absolute/path/to/service-account-file.json"
+   ```
+
+   **Option 2: Using FIREBASE_SERVICE_ACCOUNT_PATH**
+   ```
+   FIREBASE_SERVICE_ACCOUNT_PATH="/absolute/path/to/service-account-file.json"
+   ```
+
+   **Option 3: Using FIREBASE_SERVICE_ACCOUNT (JSON content)**
+   ```
+   FIREBASE_SERVICE_ACCOUNT='{"type":"service_account","project_id":"your-project-id",...}'
+   ```
 
 ### Development
 Start the development server:

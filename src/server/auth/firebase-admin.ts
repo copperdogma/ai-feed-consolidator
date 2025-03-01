@@ -1,29 +1,81 @@
-import * as admin from 'firebase-admin';
+import { initializeApp, cert, getApps, getApp } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
 import { logger } from '../utils/logger';
 import { User } from '../../types/user';
+import * as fs from 'fs';
 
 // Initialize Firebase Admin SDK
-// Note: In production, you should use environment variables or secret management
-// for the service account credentials
-if (!admin.apps.length) {
-  try {
-    admin.initializeApp({
-      // If using environment variables for service account:
-      // credential: admin.credential.cert({
-      //   projectId: process.env.FIREBASE_PROJECT_ID,
-      //   clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      //   privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-      // }),
-      
-      // For development, we can use the application default credentials
-      credential: admin.credential.applicationDefault(),
+try {
+  // Log the environment we're running in
+  logger.info(`Initializing Firebase Admin SDK in ${process.env.NODE_ENV} environment`);
+  
+  // Check if the app is already initialized
+  if (!getApps().length) {
+    let credential;
+    
+    // Option 1: Use FIREBASE_SERVICE_ACCOUNT environment variable (JSON string)
+    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+      try {
+        const serviceAccountJson = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+        credential = cert(serviceAccountJson);
+        logger.info('Using Firebase credentials from FIREBASE_SERVICE_ACCOUNT environment variable');
+      } catch (e) {
+        logger.error('Failed to parse FIREBASE_SERVICE_ACCOUNT:', e);
+        throw e;
+      }
+    } 
+    // Option 2: Use FIREBASE_SERVICE_ACCOUNT_PATH environment variable (path to JSON file)
+    else if (process.env.FIREBASE_SERVICE_ACCOUNT_PATH) {
+      try {
+        const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
+        if (!fs.existsSync(serviceAccountPath)) {
+          throw new Error(`Service account file not found at: ${serviceAccountPath}`);
+        }
+        const serviceAccountJson = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
+        credential = cert(serviceAccountJson);
+        logger.info(`Using Firebase credentials from file: ${serviceAccountPath}`);
+      } catch (e) {
+        logger.error('Failed to load service account from file:', e);
+        throw e;
+      }
+    }
+    // Option 3: Use Application Default Credentials (set via GOOGLE_APPLICATION_CREDENTIALS)
+    else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+      // When GOOGLE_APPLICATION_CREDENTIALS is set, the SDK will use it automatically
+      // We don't need to explicitly set the credential
+      logger.info(`Using Application Default Credentials from GOOGLE_APPLICATION_CREDENTIALS`);
+    } else {
+      logger.warn('No explicit Firebase credentials provided. Attempting to use Application Default Credentials.');
+      logger.warn('If running locally, set GOOGLE_APPLICATION_CREDENTIALS environment variable.');
+    }
+
+    // Initialize the app with the credential
+    initializeApp({
+      credential
     });
     
     logger.info('Firebase Admin SDK initialized successfully');
-  } catch (error) {
-    logger.error('Error initializing Firebase Admin SDK:', error);
-    throw error;
+  } else {
+    logger.info('Firebase Admin SDK already initialized');
   }
+} catch (error) {
+  logger.error('Error initializing Firebase Admin SDK:', error);
+  // Log more details about the error
+  if (error instanceof Error) {
+    logger.error(`Error name: ${error.name}, message: ${error.message}`);
+    if (error.stack) {
+      logger.error(`Stack trace: ${error.stack}`);
+    }
+  }
+  
+  // Provide guidance on how to fix common issues
+  logger.error('Make sure you have set up Firebase Admin SDK credentials correctly:');
+  logger.error('1. For local development, download a service account key from the Firebase Console');
+  logger.error('2. Set GOOGLE_APPLICATION_CREDENTIALS="/path/to/service-account-file.json"');
+  logger.error('3. Or set FIREBASE_SERVICE_ACCOUNT with the JSON content as a string in .env.local');
+  logger.error('4. Or set FIREBASE_SERVICE_ACCOUNT_PATH with the path to the JSON file');
+  
+  throw error;
 }
 
 /**
@@ -33,7 +85,8 @@ if (!admin.apps.length) {
  */
 export const verifyIdToken = async (idToken: string) => {
   try {
-    const decodedToken = await admin.auth().verifyIdToken(idToken);
+    const auth = getAuth();
+    const decodedToken = await auth.verifyIdToken(idToken);
     return decodedToken;
   } catch (error) {
     logger.error('Error verifying Firebase ID token:', error);
@@ -48,7 +101,7 @@ export const verifyIdToken = async (idToken: string) => {
  * @returns User object
  */
 export const findOrCreateFirebaseUser = async (
-  decodedToken: admin.auth.DecodedIdToken,
+  decodedToken: any,
   db: any
 ): Promise<User | null> => {
   try {
@@ -93,6 +146,4 @@ export const findOrCreateFirebaseUser = async (
     logger.error('Error finding or creating Firebase user:', error);
     return null;
   }
-};
-
-export default admin; 
+}; 
