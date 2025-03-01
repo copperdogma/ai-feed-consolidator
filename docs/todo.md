@@ -11,6 +11,23 @@ NOTE: when a task and all sub-tasks are 100% complete, delete them from this fil
 - Search the tests for brittle tests, like checking for an exact UI string instead of an element id/data tag. Fix that.
 
 ## Current Task
+✅ Update Documentation for Firebase Authentication
+
+### Completed Actions
+1. ✅ Updated all documentation files to reflect Firebase Authentication:
+   - ✅ Updated auth-credentials.md with Firebase Authentication details
+   - ✅ Updated design.md to reflect the authentication change
+   - ✅ Added deprecation notice to oauth-google.md
+   - ✅ Created comprehensive firebase-auth.md documentation
+2. ✅ Updated .cursorrules file:
+   - ✅ Replaced "Google OAuth2.0" with "Firebase Authentication"
+   - ✅ Updated documentation references from oauth-google.md to firebase-auth.md
+   - ✅ Updated environment variables section to include Firebase variables
+3. ✅ Cleaned up package.json:
+   - ✅ Removed Google OAuth dependencies (@types/passport, @types/passport-google-oauth20)
+   - ✅ Removed passport and passport-google-oauth20 dependencies
+
+### Next Task
 Refactor Feed Validation Error Handling
 
 ### Problem

@@ -1,8 +1,8 @@
 interface Config {
   readonly serverUrl: string;
   readonly auth: {
-    readonly googleAuthPath: string;
-    readonly googleCallbackPath: string;
+    readonly firebaseAuthPath: string;
+    readonly firebaseCallbackPath: string;
     readonly logoutPath: string;
     readonly verifyPath: string;
   };
@@ -14,8 +14,8 @@ interface Config {
 export const config: Config = {
   serverUrl: 'http://localhost:3003',
   auth: {
-    googleAuthPath: '/api/auth/google',
-    googleCallbackPath: '/api/auth/google/callback',
+    firebaseAuthPath: '/api/auth/firebase',
+    firebaseCallbackPath: '/api/auth/firebase/callback',
     logoutPath: '/api/auth/logout',
     verifyPath: '/api/auth/verify'
   },

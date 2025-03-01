@@ -11,7 +11,7 @@
   * _Frontend:_ React 18, TypeScript, Vite, Material-UI (MUI), React Query
   * _Backend:_ Node.js 20, Express, PostgreSQL 16, pg-promise
   * _Other:_ 
-    * Authentication: Passport, Google OAuth2.0
+    * Authentication: Firebase Authentication
     * Testing: Vitest, Testing Library
     * Code Quality: ESLint, Prettier
     * Deployment: Docker, fly.io
@@ -42,7 +42,7 @@
 * **docs/database-design.md:** Database schema, relationships, and implementation details.
 * **docs/postgres-overview.md:** PostgreSQL setup, configuration, and maintenance procedures.
 * **docs/auth-credentials.md:** Authentication credentials management and security practices.
-* **docs/oauth-google.md:** Google OAuth2.0 integration setup and implementation details.
+* **docs/firebase-auth.md:** Firebase Authentication setup and implementation details.
 * **docs/content-summarizer.md:** Content summarization system architecture and implementation.
 * **docs/content-value.md:** Content evaluation criteria and value assessment guidelines.
 * **docs/gpt-analyze.md:** GPT integration for content analysis and summarization.
@@ -71,8 +71,10 @@
   * `PORT`: Backend server port (default: 3003)
   * `SESSION_SECRET`: Secret for session management
   * `OPENAI_API_KEY`: OpenAI API key for summaries
-  * `GOOGLE_CLIENT_ID`: OAuth client ID
-  * `GOOGLE_CLIENT_SECRET`: OAuth client secret
+  * `VITE_FIREBASE_API_KEY`: Firebase API key for client authentication
+  * `VITE_FIREBASE_AUTH_DOMAIN`: Firebase auth domain for client authentication
+  * `VITE_FIREBASE_PROJECT_ID`: Firebase project ID
+  * `FIREBASE_SERVICE_ACCOUNT`: Firebase Admin SDK service account JSON (server-side)
 * **Optional Variables:**
   * `LOG_LEVEL`: Pino log level (default: info)
   * `CLIENT_URL`: Frontend URL (default: http://localhost:5173)

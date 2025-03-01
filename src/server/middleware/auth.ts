@@ -1,3 +1,9 @@
+/**
+ * @deprecated This file is deprecated as the application has migrated to Firebase Authentication.
+ * It is kept for reference and backward compatibility with tests.
+ * Use Firebase Authentication methods instead.
+ */
+
 import passport from 'passport';
 import { Strategy as GoogleStrategy, Profile } from 'passport-google-oauth20';
 import { config } from '../config';

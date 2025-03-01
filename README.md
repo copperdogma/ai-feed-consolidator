@@ -34,9 +34,8 @@ A personal platform for managing and consuming content from various services by 
 ### Prerequisites
 - Node.js 20+
 - Docker and Docker Compose
-- Google Cloud Platform account (for OAuth)
-- OpenAI API key (for summaries)
 - Firebase project (for authentication)
+- OpenAI API key (for summaries)
 
 ### Installation
 1. Clone the repository:

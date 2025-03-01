@@ -346,33 +346,27 @@ services:
 
 ## Authentication Design
 
-### Google OAuth 2.0 Configuration
+### Firebase Authentication Configuration
 - **Project Setup**:
-  - Dedicated Google Cloud Project for isolation
-  - External user type for broader access
+  - Dedicated Firebase project for isolation
+  - Web application type
   - Production-ready configuration with security best practices
 
-- **OAuth Consent Screen**:
-  - App Name: "AI Feed Consolidator"
-  - User Type: External
-  - Authorized Domains: 
-    - Development: localhost
-    - Production: TBD
-
-- **OAuth Scopes**:
-  - Basic Profile (`openid`, `profile`, `email`)
-  - Additional scopes to be added incrementally as needed
+- **Authentication Methods**:
+  - Primary: Google Sign-in
+  - Future options: Email/Password, GitHub, etc.
 
 - **Security Configuration**:
-  - Authorized JavaScript Origins:
-    - Development: `http://localhost:5173`
+  - Authorized domains:
+    - Development: `localhost`
     - Production: TBD
-  - Authorized Redirect URIs:
-    - Development: `http://localhost:5173/auth/google/callback`
-    - Production: TBD
+  - Proper CORS configuration
+  - Token-based authentication
+  - Secure session management
 
 - **Environment Variables**:
-  - Client ID and Secret stored in `.env`
+  - Client-side Firebase config in `.env`
+  - Server-side Firebase Admin credentials in `.env`
   - Example template in `.env.example`
   - Excluded from version control
   - Different configurations for dev/prod
@@ -382,34 +376,46 @@ services:
   - `.env` files excluded from git
   - Session secret for cookie encryption
   - CSRF protection implemented
-  - Refresh token handling
-  - Secure cookie configuration 
+  - Secure cookie configuration
+  - Service account key rotation
 
 ## Authentication System
 
 ### Overview
-The application uses Google OAuth 2.0 for authentication, providing a secure and familiar login experience. This choice was made to:
-- Leverage Google's robust security infrastructure
+The application uses Firebase Authentication, providing a secure and familiar login experience. This choice was made to:
+- Leverage Firebase's robust security infrastructure
 - Simplify user onboarding (no new passwords to remember)
 - Access Google services (YouTube, etc.) with proper authorization
+- Benefit from Firebase's scalable authentication service
 
 ### Architecture
 1. **Frontend (React + Vite)**
+   - Uses Firebase JavaScript SDK
    - Handles authentication state management
    - Provides login/logout UI
    - Makes authenticated API calls to backend
-   - Uses proxy configuration to handle OAuth redirects
+   - Token-based authentication
 
-2. **Backend (Express + Passport)**
-   - Manages OAuth flow with Google
-   - Handles session management
+2. **Backend (Express + Firebase Admin SDK)**
+   - Verifies Firebase ID tokens
+   - Handles user session management
    - Provides protected API endpoints
    - Uses CORS for secure frontend communication
 
 3. **Session Management**
    - Server-side sessions using `express-session`
-   - Cookie-based session tracking
-   - Secure session configuration for production
+   - Authentication state persisted in localStorage/cookies
+   - Token verification on API requests
+   - Auto-refresh for expired tokens
+
+4. **Authentication Flow**
+   1. User clicks "Sign in with Google" button
+   2. Firebase Authentication popup opens
+   3. User authenticates with Google
+   4. Firebase returns authentication credentials
+   5. Frontend stores auth token
+   6. Backend verifies token with Firebase Admin SDK
+   7. User session created
 
 ### Security Measures
 1. **Development Environment**
@@ -425,7 +431,7 @@ The application uses Google OAuth 2.0 for authentication, providing a secure and
    - Regular session secret rotation
 
 ### Data Flow
-1. User clicks "Log in with Google" button
+1. User clicks "Sign in with Google" button
 2. Frontend redirects to `/api/auth/google`
 3. Backend initiates OAuth flow with Google
 4. Google redirects to `/api/auth/google/callback` with auth code
@@ -447,42 +453,6 @@ The application uses Google OAuth 2.0 for authentication, providing a secure and
    - Email verification
    - Account linking
    - Role-based access control
-
-### Firebase Authentication
-- Client-side implementation
-  - Firebase SDK for web authentication
-  - Google authentication provider
-  - Token-based authentication
-  - Auth state management with React context
-- Server-side implementation
-  - Firebase Admin SDK for token verification
-  - Express middleware for authentication
-  - User management in PostgreSQL database
-  - Session management with JWT tokens
-
-#### Authentication Flow
-1. User initiates sign-in with Google through Firebase Authentication
-2. Firebase handles OAuth flow and returns Firebase user and ID token
-3. Client sends ID token to server for verification
-4. Server verifies token using Firebase Admin SDK
-5. Server finds or creates user in database based on Firebase user ID
-6. Server returns user data to client
-7. Client stores authentication state in React context
-8. Protected routes check authentication state before rendering
-
-#### Firebase Configuration
-- Client-side configuration in `src/firebase/config.ts`
-- Authentication service in `src/firebase/auth.ts`
-- Server-side Firebase Admin in `src/server/auth/firebase-admin.ts`
-- Authentication middleware in `src/server/auth/middleware.ts`
-- Authentication routes in `src/server/routes/auth.ts`
-
-#### Security Considerations
-- ID tokens are short-lived (1 hour by default)
-- Tokens are verified on every request to protected routes
-- User data is stored securely in PostgreSQL database
-- Sensitive operations require re-authentication
-- Login history is tracked for security monitoring
 
 ## API Design
 

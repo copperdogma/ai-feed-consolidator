@@ -1,3 +1,9 @@
+/**
+ * @deprecated These exports are deprecated as the application has migrated to Firebase Authentication.
+ * They are kept for reference and backward compatibility with tests.
+ * Use Firebase Authentication methods instead.
+ */
+
 export { configureGoogleStrategy } from './google-strategy';
 export { configureSession } from './session';
 export { configurePassport } from './passport';

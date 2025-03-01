@@ -1,6 +1,9 @@
-# Google OAuth 2.0 Implementation Guide
+# DEPRECATED - Google OAuth 2.0 Implementation Guide
+
+> **NOTE**: This documentation is deprecated. The application now uses Firebase Authentication instead of direct Google OAuth. Please refer to `docs/firebase-auth.md` for current authentication implementation.
 
 20240119: Created by Cam Marsollier with Claude 3.5 Sonnet
+20240228: Deprecated by Cam Marsollier with Claude 3.7 Sonnet - Replaced with Firebase Authentication
 
 ## Prerequisites
 1. Node.js and npm installed

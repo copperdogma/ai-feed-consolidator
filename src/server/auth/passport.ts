@@ -1,3 +1,9 @@
+/**
+ * @deprecated This file is deprecated as the application has migrated to Firebase Authentication.
+ * It is kept for reference and backward compatibility with tests.
+ * Use Firebase Authentication methods instead.
+ */
+
 import passport from 'passport';
 import { UserService } from '../services/user-service';
 import type { User } from '../../types/user';

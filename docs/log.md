@@ -1,6 +1,20 @@
 # AI Feed Consolidator Project Log
 - new items go at the top
 
+## 20250301: Documentation Update for Firebase Authentication
+- Completed comprehensive documentation update for Firebase Authentication:
+  - Updated auth-credentials.md with Firebase Authentication details
+  - Updated design.md to reflect the authentication change
+  - Added deprecation notice to oauth-google.md
+  - Created comprehensive firebase-auth.md documentation
+  - Updated .cursorrules file to replace Google OAuth references with Firebase Authentication
+  - Updated environment variables in .cursorrules to include Firebase variables
+  - Cleaned up package.json by removing Google OAuth dependencies
+- Technical achievements:
+  - Ensured all documentation accurately reflects the current authentication method
+  - Removed outdated references to Google OAuth throughout the codebase
+  - Provided clear guidance for Firebase Authentication implementation
+
 ## 20250228: Migration to Firebase Authentication
 - Successfully migrated authentication system from Google OAuth to Firebase:
   - Implemented Firebase client-side services including configuration and authentication
