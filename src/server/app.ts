@@ -88,5 +88,11 @@ export async function createApp(): Promise<Express> {
   app.use('/api/auth', authRouter);
   logger.info('Auth routes registered successfully');
 
+  // Add a health check endpoint
+  app.get('/api/health', (req: express.Request, res: express.Response) => {
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
+  logger.info('Health check endpoint registered');
+
   return app;
 } 
