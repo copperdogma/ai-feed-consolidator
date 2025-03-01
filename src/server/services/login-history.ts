@@ -77,7 +77,10 @@ export class LoginHistoryService {
       logger.error('Failed to record login', {
         userId,
         ipAddress,
-        error
+        errorName: error instanceof Error ? error.name : 'Unknown',
+        errorMessage: error instanceof Error ? error.message : String(error),
+        errorStack: error instanceof Error ? error.stack : undefined,
+        errorDetails: error
       });
       throw error;
     }
@@ -102,9 +105,11 @@ export class LoginHistoryService {
           user_agent, 
           success, 
           failure_reason,
-          request_path
+          request_path,
+          created_at,
+          updated_at
         )
-        VALUES ($1, NOW(), $2, $3, false, $4, $5)`,
+        VALUES ($1, NOW(), $2, $3, false, $4, $5, NOW(), NOW())`,
         [userId || null, ipAddress, userAgent, failureReason, requestPath]
       );
       logger.info({ ipAddress, failureReason }, 'Failed login attempt recorded');

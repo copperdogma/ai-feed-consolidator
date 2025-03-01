@@ -44,6 +44,7 @@ export async function createApp(): Promise<Express> {
   // Initialize services
   const container = getServiceContainer();
   const loginHistoryService = new LoginHistoryService(container);
+  container.register('loginHistoryService', loginHistoryService);
   
   // Register RSS services before importing routes
   registerRSSServices(container);

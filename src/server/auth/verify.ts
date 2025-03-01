@@ -48,7 +48,14 @@ export const verifyAuth = async (req: Request, res: Response): Promise<void> => 
       logger.debug('Login recorded successfully');
     } catch (error) {
       // Don't fail the request if recording login fails
-      logger.error('Failed to record login:', error);
+      logger.error('Failed to record login - Details:', {
+        error: error instanceof Error ? {
+          name: error.name,
+          message: error.message, 
+          stack: error.stack
+        } : error,
+        userId: req.user.id
+      });
     }
 
     // Return the user data
