@@ -1,0 +1,16 @@
+---
+description: Updating the scratchpad periodically
+globs: 
+alwaysApply: false
+---
+# Update the Scratchpad
+
+Take stock of what you're doing and what you've done.
+
+Read the [scratchpad.md](mdc:scratchpad.md) and update it, leaning toward recording:
+- What you're currently working on
+- Your progress
+- What you've learned, especially recording what you've tried that's failed so it doesn't get tried again in the future.
+- Keep [scratchpad.md](mdc:scratchpad.md) tidy and organized.
+
+If you think you're done your current task, check all of the seemingly outstanding work in [scratchpad.md](mdc:scratchpad.md) and verify it's complete. If it is, mark it done or delete it.

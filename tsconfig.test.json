@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "node16",
+    "target": "es2015",
+    "esModuleInterop": true,
+    "skipLibCheck": true
+  },
+  "include": [
+    "src/tests/**/*",
+    "src/server/**/*",
+    "src/utils/**/*"
+  ]
+} 

@@ -1,0 +1,21 @@
+---
+description: Instructions for handling really tricky or repeated issues or when struggling
+globs: 
+alwaysApply: false
+---
+Take a step back and analyze the situation and code. Look for root causes.
+
+## Investigate
+- Is the code being tested a monolith that's doing way too much that should be refactored?
+- Is it violating the Single Responsibility Principle? Is it buggy and untestable?
+- Is there something about your approach to testing that keeps failing so you need to try another approach?
+- If you're confident the code being tested is correct, can you add debug statements to the test to see what output we should be expecting?
+
+## Make Hypotheses
+Make at least three hypothesis as to what the true reason behind this issue could be, then start checking each hypothesis vs the code to verify or disprove your thesis.
+
+If you feel it may help, search the web for assistance. (If I didn't grant you web tool access, request it.)
+
+Update [scratchpad.md](mdc:scratchpad.md) with your findings.
+
+Once done, make a recommendation as to how to fix the issue, but don't proceed without permission.

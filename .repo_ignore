@@ -1,0 +1,37 @@
+# Dependency & Cache Directories
+**/node_modules/
+.npm/
+**/__pycache__/
+**/.pytest_cache/
+**/.mypy_cache/
+**/.gradle/
+**/.nuget/
+**/.cargo/
+**/.stack-work/
+**/.ccache/
+
+# IDE, Editor & Temporary Files
+**/.idea/
+**/.vscode/
+*.swp
+*~
+*.tmp
+*.temp
+*.bak
+*.meta
+package-lock.json
+.env
+
+# Version Control & Internal Configs
+.git/
+.gitattributes
+.cursorrules
+.cursor/
+
+# Non-Code Assets & Backup Folders
+img/
+public/
+migrations_backup/
+src/assets/*.{png,jpg,jpeg,svg}
+npm/
+vite/
