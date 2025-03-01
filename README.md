@@ -57,7 +57,7 @@ cp .env.example .env
 npm install
 ```
 
-##***REMOVED*** Setup
+### Firebase Setup
 
 #### Client-Side Setup
 1. Create a Firebase project at [https://console.firebase.google.com/](https://console.firebase.google.com/)

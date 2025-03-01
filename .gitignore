@@ -50,7 +50,7 @@ credentials.json
 *-credentials.json
 *.pem
 *.key
-***REMOVED*** service account - using patterns instead of specific filenames
+# Firebase service account - using patterns instead of specific filenames
 *-firebase-adminsdk-*.json
 firebase-*.json
 firebase-credentials.json

@@ -74,7 +74,7 @@ rl.question('Enter the path to your service account JSON file: ', (filePath) => 
 
 function writeEnvFile(envPath, serviceAccount) {
   // Create the .env.local file content
-  const envContent = `***REMOVED*** Admin SDK credentials
+  const envContent = `# Firebase Admin SDK credentials
 FIREBASE_SERVICE_ACCOUNT='${serviceAccount.replace(/'/g, "\\'")}'
 
 # Or alternatively, you can use this approach:

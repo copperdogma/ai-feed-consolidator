@@ -2,7 +2,7 @@
 
 20240119: Created by Cam Marsollier with Claude 3.5 Sonnet
 
-#***REMOVED***
+## Google OAuth
 - **Project Name**: AI Feed Consolidator
 - **Project ID**: ai-feed-consolidator
 - **Application Type**: Web Application

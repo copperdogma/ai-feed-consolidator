@@ -1,4 +1,4 @@
-***REMOVED*** 2.0 Implementation Guide
+# Google OAuth 2.0 Implementation Guide
 
 20240119: Created by Cam Marsollier with Claude 3.5 Sonnet
 
@@ -7,7 +7,7 @@
 2. A Google Cloud Console account
 3. A React + TypeScript project (we used Vite)
 
-#***REMOVED*** Configuration
+## Google OAuth Configuration
 
 ### Google Cloud Console Setup
 1. Go to the [Google Cloud Console](https://console.cloud.google.com)

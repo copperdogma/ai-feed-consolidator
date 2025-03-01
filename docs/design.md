@@ -346,7 +346,7 @@ services:
 
 ## Authentication Design
 
-##***REMOVED*** 2.0 Configuration
+### Google OAuth 2.0 Configuration
 - **Project Setup**:
   - Dedicated Google Cloud Project for isolation
   - External user type for broader access
@@ -448,7 +448,7 @@ The application uses Google OAuth 2.0 for authentication, providing a secure and
    - Account linking
    - Role-based access control
 
-##***REMOVED*** Authentication
+### Firebase Authentication
 - Client-side implementation
   - Firebase SDK for web authentication
   - Google authentication provider
@@ -470,7 +470,7 @@ The application uses Google OAuth 2.0 for authentication, providing a secure and
 7. Client stores authentication state in React context
 8. Protected routes check authentication state before rendering
 
-###***REMOVED*** Configuration
+#### Firebase Configuration
 - Client-side configuration in `src/firebase/config.ts`
 - Authentication service in `src/firebase/auth.ts`
 - Server-side Firebase Admin in `src/server/auth/firebase-admin.ts`

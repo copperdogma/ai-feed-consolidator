@@ -9,7 +9,7 @@ The content summarization system provides concise, informative summaries in 1-3 
 
 ## Implementation
 
-##***REMOVED*** Service
+### OpenAI Service
 ```typescript
 async extractCorePoints(content: string): Promise<SummaryResponse> {
   const completion = await this.client.chat.completions.create({
