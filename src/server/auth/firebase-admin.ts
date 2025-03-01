@@ -1,4 +1,4 @@
-import { initializeApp, cert, getApps, getApp } from 'firebase-admin/app';
+import { initializeApp, cert, getApps, getApp, AppOptions } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { logger } from '../utils/logger';
 import { User } from '../../types/user';
@@ -12,6 +12,7 @@ try {
   // Check if the app is already initialized
   if (!getApps().length) {
     let credential;
+    let appOptions: AppOptions = {};
     
     // Option 1: Use FIREBASE_SERVICE_ACCOUNT environment variable (JSON string)
     if (process.env.FIREBASE_SERVICE_ACCOUNT) {
@@ -19,6 +20,7 @@ try {
         const serviceAccountJson = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
         credential = cert(serviceAccountJson);
         logger.info('Using Firebase credentials from FIREBASE_SERVICE_ACCOUNT environment variable');
+        appOptions.credential = credential;
       } catch (e) {
         logger.error('Failed to parse FIREBASE_SERVICE_ACCOUNT:', e);
         throw e;
@@ -34,6 +36,7 @@ try {
         const serviceAccountJson = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
         credential = cert(serviceAccountJson);
         logger.info(`Using Firebase credentials from file: ${serviceAccountPath}`);
+        appOptions.credential = credential;
       } catch (e) {
         logger.error('Failed to load service account from file:', e);
         throw e;
@@ -42,17 +45,15 @@ try {
     // Option 3: Use Application Default Credentials (set via GOOGLE_APPLICATION_CREDENTIALS)
     else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
       // When GOOGLE_APPLICATION_CREDENTIALS is set, the SDK will use it automatically
-      // We don't need to explicitly set the credential
       logger.info(`Using Application Default Credentials from GOOGLE_APPLICATION_CREDENTIALS`);
+      // We don't need to explicitly set the credential, the SDK will use ADC
     } else {
       logger.warn('No explicit Firebase credentials provided. Attempting to use Application Default Credentials.');
       logger.warn('If running locally, set GOOGLE_APPLICATION_CREDENTIALS environment variable.');
     }
 
-    // Initialize the app with the credential
-    initializeApp({
-      credential
-    });
+    // Initialize the app with the appropriate options
+    initializeApp(appOptions);
     
     logger.info('Firebase Admin SDK initialized successfully');
   } else {
