@@ -18,15 +18,15 @@ export async function createApp(): Promise<Express> {
       origin: config.clientUrl,
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization']
+      allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
     };
   } else {
-    // In development, allow all origins
+    // In development, allow specific origin with credentials
     corsOptions = {
-      origin: '*',
+      origin: config.clientUrl, // Use specific client URL instead of wildcard
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization']
+      allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
     };
   }
   

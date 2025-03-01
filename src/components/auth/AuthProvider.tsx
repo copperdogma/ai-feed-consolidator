@@ -8,6 +8,7 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   error: string | null;
+  isRedirecting: boolean;
   signIn: () => Promise<void>;
   signOut: () => Promise<void>;
 }
@@ -16,6 +17,7 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
   error: null,
+  isRedirecting: false,
   signIn: async () => {},
   signOut: async () => {},
 });
@@ -26,6 +28,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isRedirecting, setIsRedirecting] = useState(false);
 
   // Check for redirect result on initial load
   useEffect(() => {
@@ -42,6 +45,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch (err) {
         console.error('Redirect authentication error:', err);
         setError(err instanceof Error ? err.message : 'Authentication error');
+      } finally {
+        // Ensure loading state is updated even if there's no redirect result
+        setLoading(false);
       }
     };
     
@@ -98,6 +104,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       setLoading(true);
       setError(null);
+      setIsRedirecting(true);
       console.log('Starting sign in process...');
       await signInWithGoogle();
       console.log('Sign in function completed');
@@ -106,6 +113,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error('Sign in error:', err);
       setError(err instanceof Error ? err.message : 'Sign in failed');
       setLoading(false);
+      setIsRedirecting(false);
     }
   };
 
@@ -137,6 +145,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     user,
     loading,
     error,
+    isRedirecting,
     signIn: handleSignIn,
     signOut: handleSignOut,
   };

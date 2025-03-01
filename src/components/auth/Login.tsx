@@ -5,7 +5,7 @@ import { useAuth } from './AuthProvider';
 import { useNavigate } from 'react-router-dom';
 
 const Login: React.FC = () => {
-  const { signIn, loading, error, user } = useAuth();
+  const { signIn, loading, error, user, isRedirecting } = useAuth();
   const navigate = useNavigate();
 
   // Redirect authenticated users to the main page
@@ -39,6 +39,27 @@ const Login: React.FC = () => {
           <CircularProgress />
           <Typography variant="body1" sx={{ mt: 2 }}>
             Redirecting to your dashboard...
+          </Typography>
+        </Box>
+      </Container>
+    );
+  }
+
+  // If we're redirecting to Google for authentication
+  if (isRedirecting) {
+    return (
+      <Container maxWidth="sm">
+        <Box
+          sx={{
+            marginTop: 8,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+          }}
+        >
+          <CircularProgress />
+          <Typography variant="body1" sx={{ mt: 2 }}>
+            Redirecting to Google for authentication...
           </Typography>
         </Box>
       </Container>
@@ -83,7 +104,7 @@ const Login: React.FC = () => {
             color="primary"
             startIcon={loading ? <CircularProgress size={20} color="inherit" /> : <GoogleIcon />}
             onClick={handleGoogleLogin}
-            disabled={loading}
+            disabled={loading || isRedirecting}
             fullWidth
             sx={{ mt: 2 }}
           >
