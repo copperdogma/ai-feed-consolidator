@@ -6,14 +6,16 @@
 
 ## Current Tasks
 1. Address React Query warnings in the client application
-2. ✅ Update documentation with Firebase authentication details
 3. Examine tests for redundancy and improve test performance
-4. Consider rotating credentials that were previously exposed in Git history
 5. Implement feed management testing
-6. Document where the API paths are so the AI can easily find/access them in the future.
 7. Fix linter errors in deprecated auth.ts middleware file related to config.google property
 
 ## Recently Completed
+- ✅ Created comprehensive API paths documentation
+  - Created docs/api-reference.md with detailed endpoint information
+  - Documented authentication, feed management, and feed item endpoints
+  - Included request/response examples and implementation details
+  - Added error response formats and common error codes
 - ✅ Updated all documentation to reflect Firebase Authentication
   - Updated `.cursorrules` with Firebase environment variables
   - Removed Google OAuth dependencies from package.json
@@ -60,6 +62,12 @@
   - All tests currently passing
   - Some React Query warnings remain to be addressed
   - Database connection pooling optimized for tests
+
+- API Documentation:
+  - Complete API reference available in docs/api-reference.md
+  - Authentication endpoints: /api/auth/*
+  - Feed endpoints: /api/feeds/*
+  - Feed item endpoints: /api/feed-items/*
 
 ## Next Features (After Current Tasks)
 1. Feed integration implementations:
